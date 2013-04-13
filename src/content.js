@@ -50,7 +50,10 @@ function initialiseJSONBrowser() {
       navigateTo(link.href);
       return true;
     });
-    JsonBrowser.data = Jsonary.create(JSON.parse(singleton.innerText)).readOnlyCopy();
+    var baseUri = window.location.toString();
+    var json = JSON.parse(singleton.innerText);
+    JsonBrowser.data = Jsonary.create(json, baseUri)
+      .readOnlyCopy();
     Jsonary.render(singleton, JsonBrowser.data);
     addJsonCss();
     renderSchema();
