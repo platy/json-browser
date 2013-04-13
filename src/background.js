@@ -45,9 +45,7 @@ function contentTypeIsJson(contentTypeHeader) {
 }
 
 var filter = {
-  urls: ["<all_urls>",
-      "http://*/*",
-      "https://*/*"],
+  urls: ["<all_urls>"],
   types: ["main_frame"]
 };
 
