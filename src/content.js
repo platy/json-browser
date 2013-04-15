@@ -38,11 +38,13 @@ function onMessage(request, sender, sendResponse) {
 function renderSchema() {
   var data = JsonBrowser.data;
   var schema = JsonBrowser.schema;
-  if (data != undefined && schema != undefined) {
+  if (data != undefined && schema != undefined && (!history.state || !history.state.json)) {
     console.log("Reloading with schema " + schema);
 
+    if (history.state && history.state.json) {
+      history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
+    }
     JsonBrowser.data.addSchema(schema, schemaKey);
-    history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
   }
 }
 
@@ -69,6 +71,12 @@ function navigateTo(itemUrl, request) {
       JsonBrowser.data = data;
       Jsonary.render(singleton, JsonBrowser.data);
       history.pushState(serialiseJsonaryData(JsonBrowser.data), "", itemUrl);
+      data.whenSchemasStable(function () {
+        // All the schemas have loaded, so save again to get the full schema list
+        if (JsonBrowser.data == data) {
+          history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", itemUrl);
+        }
+      });
     });
   } else {
     window.location = itemUrl;
@@ -76,7 +84,7 @@ function navigateTo(itemUrl, request) {
 }
 
 window.onpopstate = function () {
-  if (history.state.json) {
+  if (history.state && history.state.json) {
     console.log("Loading from saved state");
     console.log(history.state);
     var singleton = document.body.childNodes[0];
@@ -123,9 +131,11 @@ function initialiseJSONBrowser() {
     JsonBrowser.data = Jsonary.create(json, baseUri)
       .readOnlyCopy();
     Jsonary.render(singleton, JsonBrowser.data);
-    history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
     addJsonCss();
     renderSchema();
+    if (history.state && history.state.json) {
+      history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
+    }
   }
   
   // Route all logging to the console
