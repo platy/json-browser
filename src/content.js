@@ -1,3 +1,33 @@
+function serialiseJsonaryData(data, previousState) {
+  var schemaUrls = (previousState && previousState.schemas) ? previousState.schemas.slice(0) : [];
+  data.schemas().each(function (index, schema) {
+    var schemaUri = schema.referenceUrl();
+    console.log("Saving schema: " + schema.referenceUrl());
+    if (schemaUrls.indexOf(schemaUri) == -1) {
+      schemaUrls.push(schemaUri);
+    }
+  });
+  return {
+    json: data.json(),
+    uri: data.referenceUrl(),
+    schemas: schemaUrls
+  }
+}
+
+var schemaKey = "JSON Browser";
+
+function deserialiseJsonaryData(state) {
+  var data = Jsonary.create(JSON.parse(state.json), state.uri, true);
+  for (var i = 0; i < state.schemas.length; i++) {
+    var schemaUri = state.schemas[i];
+    if (schemaUri) {
+      console.log("Adding schema: " + schemaUri);
+      data.addSchema(schemaUri, schemaKey);
+    }
+  }
+  return data;
+}
+
 var JsonBrowser = {};
 
 function onMessage(request, sender, sendResponse) {
@@ -11,7 +41,8 @@ function renderSchema() {
   if (data != undefined && schema != undefined) {
     console.log("Reloading with schema " + schema);
 
-    JsonBrowser.data.addSchema(schema);
+    JsonBrowser.data.addSchema(schema, schemaKey);
+    history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
   }
 }
 
@@ -30,8 +61,29 @@ function addCss(element, path) {
 }
 
 function navigateTo(itemUrl, request) {
-	window.location = itemUrl;
+  if (request != undefined) {
+    var singleton = document.body.childNodes[0];
+    singleton.innerHTML = "Loading...";
+    history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
+    request.getRawResponse(function (data) {
+      JsonBrowser.data = data;
+      Jsonary.render(singleton, JsonBrowser.data);
+      history.pushState(serialiseJsonaryData(JsonBrowser.data), "", itemUrl);
+    });
+  } else {
+    window.location = itemUrl;
+  }
 }
+
+window.onpopstate = function () {
+  if (history.state.json) {
+    console.log("Loading from saved state");
+    console.log(history.state);
+    var singleton = document.body.childNodes[0];
+    JsonBrowser.data = deserialiseJsonaryData(history.state);
+    Jsonary.render(singleton, JsonBrowser.data);
+  }
+};
 
 function looksLikeJson(json) {
   return json.match(/^.*[{["]/) != null;
@@ -46,8 +98,24 @@ function isUnitialisedJson(element) {
 function initialiseJSONBrowser() {
   var singleton = document.body.childNodes[0];
   if (isUnitialisedJson(singleton)) {
+    Jsonary.addLinkPreHandler(function(link, submissionData) {
+      if (link.method != "GET") {
+        return;
+      }
+      var href = link.href;
+      if (submissionData.defined()) {
+        if (href.indexOf("?") == -1) {
+          href += "?";
+        } else {
+          href += "&";
+        }
+         href += Jsonary.encodeData(submissionData.value());
+      }
+      navigateTo(href);
+      return false;
+    });
     Jsonary.addLinkHandler(function(link, data, request) {
-      navigateTo(link.href);
+      navigateTo(link.href, request);
       return true;
     });
     var baseUri = window.location.toString();
@@ -55,6 +123,7 @@ function initialiseJSONBrowser() {
     JsonBrowser.data = Jsonary.create(json, baseUri)
       .readOnlyCopy();
     Jsonary.render(singleton, JsonBrowser.data);
+    history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
     addJsonCss();
     renderSchema();
   }
