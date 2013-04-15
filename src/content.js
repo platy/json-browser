@@ -127,6 +127,13 @@ function initialiseJSONBrowser() {
     addJsonCss();
     renderSchema();
   }
+  
+  // Route all logging to the console
+  Jsonary.setLogFunction(function (level, message) {
+    if (level >= Jsonary.logLevel.WARNING) {
+      console.log("Log level " + level + ": " + message);
+    }
+  });
 }
 
 window.onload = initialiseJSONBrowser;
