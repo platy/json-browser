@@ -9,7 +9,7 @@ function serialiseJsonaryData(data, previousState) {
   });
   return {
     json: data.json(),
-    uri: data.referenceUrl(),
+    uri: data.document.url,
     schemas: schemaUrls
   }
 }
@@ -68,6 +68,7 @@ function navigateTo(itemUrl, request) {
     singleton.innerHTML = "Loading...";
     history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
     request.getRawResponse(function (data) {
+      console.log(data.referenceUrl());
       JsonBrowser.data = data;
       Jsonary.render(singleton, JsonBrowser.data);
       history.pushState(serialiseJsonaryData(JsonBrowser.data), "", itemUrl);
@@ -83,8 +84,19 @@ function navigateTo(itemUrl, request) {
   }
 }
 
+var ignoreState = true;
 window.onpopstate = function () {
   if (history.state && history.state.json) {
+    if (ignoreState && history.state.uri) {
+      ignoreState = false;
+      if (window.location.toString() != history.state.uri) {
+        console.log([window.location.toString(), history.state.uri]);
+        window.location.replace(history.state.uri);
+      } else {
+        history.replaceState({}, "", history.state.uri);
+      }
+      return;
+    }
     console.log("Loading from saved state");
     console.log(history.state);
     var singleton = document.body.childNodes[0];
@@ -123,13 +135,13 @@ function initialiseJSONBrowser() {
       return false;
     });
     Jsonary.addLinkHandler(function(link, data, request) {
+      ignoreState = false;
       navigateTo(link.href, request);
       return true;
     });
     var baseUri = window.location.toString();
     var json = JSON.parse(singleton.innerText);
-    JsonBrowser.data = Jsonary.create(json, baseUri)
-      .readOnlyCopy();
+    JsonBrowser.data = Jsonary.create(json, baseUri, true);
     Jsonary.render(singleton, JsonBrowser.data);
     addJsonCss();
     renderSchema();
