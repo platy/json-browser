@@ -2675,8 +2675,9 @@ Data.prototype = {
 	},
 	editableCopy: function () {
 		var copy = publicApi.create(this.value(), this.document.url + "#:copy", false);
-		this.schemas().each(function (index, schema) {
-			copy.addSchema(schema);
+		var schemaKey = Utils.getUniqueKey();
+		this.schemas().fixed().each(function (index, schema) {
+			copy.addSchema(schema, schemaKey);
 		});
 		return copy;
 	},
@@ -2717,6 +2718,14 @@ Data.prototype = {
 		return this;
 	},
 	resolveUrl: function (url) {
+		var data = this;
+		while (data) {
+			var selfLink = data.getLink("self");
+			if (selfLink) {
+				return Uri.resolve(selfLink.href, url);
+			}
+			data = data.parent();
+		}
 		return this.document.resolveUrl(url);
 	},
 	get: function (path) {
@@ -4637,6 +4646,14 @@ SchemaList.prototype = {
 SchemaList.prototype.basicTypes = SchemaList.prototype.types;
 SchemaList.prototype.potentialLinks = SchemaList.prototype.links;
 
+publicApi.extendSchemaList = function (obj) {
+	for (var key in obj) {
+		if (SchemaList.prototype[key] == undefined) {
+			SchemaList.prototype[key] = obj[key];
+		}
+	}
+};
+
 publicApi.createSchemaList = function (schemas) {
 	if (!Array.isArray(schemas)) {
 		schemas = [schemas];
@@ -4686,9 +4703,26 @@ SchemaSet.prototype = {
 			}
 		}
 		if (linksToUpdate.length > 0) {
+			var updatedSelfLink = null;
 			for (i = 0; i < linksToUpdate.length; i++) {
 				linkInstance = linksToUpdate[i];
 				linkInstance.update();
+				if (linkInstance.active && linkInstance.rawLink.rawLink.rel == "self") {
+					updatedSelfLink = linkInstance;
+					break;
+				}
+			}
+			if (updatedSelfLink != null) {
+				this.cachedLinkList = null;
+				for (schemaKey in this.links) {
+					linkList = this.links[schemaKey];
+					for (i = 0; i < linkList.length; i++) {
+						var linkInstance = linkList[i];
+						if (linkInstance != updatedSelfLink) {
+							linkInstance.update();
+						}
+					}
+				}
 			}
 			// TODO: have separate "link" listeners?
 			this.invalidateSchemaState();
@@ -4806,11 +4840,28 @@ SchemaSet.prototype = {
 		if (this.links[schemaKey] == undefined) {
 			this.links[schemaKey] = [];
 		}
+		var selfLink = null;
 		for (i = 0; i < potentialLinks.length; i++) {
 			linkInstance = new LinkInstance(this.dataObj, potentialLinks[i]);
 			this.links[schemaKey].push(linkInstance);
 			this.addMonitorForLink(linkInstance, schemaKey, schemaKeyHistory);
 			linkInstance.update();
+			if (linkInstance.active && linkInstance.rawLink.rawLink.rel == "self") {
+				selfLink = linkInstance;
+			}
+		}
+		if (selfLink != null) {
+			// Delete the cache so that the "self" link shows up
+			this.cachedLinkList = null;
+			for (schemaKey in this.links) {
+				linkList = this.links[schemaKey];
+				for (i = 0; i < linkList.length; i++) {
+					var linkInstance = linkList[i];
+					if (linkInstance != selfLink) {
+						linkInstance.update();
+					}
+				}
+			}
 		}
 		this.invalidateSchemaState();
 	},
@@ -5062,10 +5113,13 @@ function LinkInstance(dataObj, potentialLink) {
 }
 LinkInstance.prototype = {
 	update: function (key) {
-		this.active = this.potentialLink.canApplyTo(this.dataObj);
-		if (this.active) {
+		var active = this.potentialLink.canApplyTo(this.dataObj);
+		if (active) {
 			this.rawLink = this.potentialLink.linkForData(this.dataObj);
+		} else {
+			this.rawLink = null;
 		}
+		this.active = active;
 		this.updateMonitors.notify(this.active);
 	},
 	rel: function () {
@@ -5463,11 +5517,16 @@ publicApi.UriTemplate = UriTemplate;
 			return '<a href="javascript:void(0)" id="' + elementId + '" style="text-decoration: none">' + innerHtml + '</a>';
 		},
 		inputNameForAction: function (actionName) {
+			var params = [];
+			for (var i = 1; i < arguments.length; i++) {
+				params.push(arguments[i]);
+			}
 			var name = this.getElementId();
 			this.enhancementInputs[name] = {
 				inputName: name,
 				actionName: actionName,
-				context: this
+				context: this,
+				params: params
 			};
 			return name;
 		},
@@ -5537,8 +5596,23 @@ publicApi.UriTemplate = UriTemplate;
 					if (this.getAttribute("type") == "checkbox") {
 						value = this.checked;
 					}
+					if (this.tagName.toLowerCase() == "select" && this.getAttribute("multiple") != null) {
+						value = [];
+						for (var i = 0; i < this.options.length; i++) {
+							var option = this.options[i];
+							if (option.selected) {
+								value.push(option.value);
+							}
+						}						
+					}
+					var redrawElementId = inputAction.context.elementId;
 					var inputContext = inputAction.context;
-					inputContext.renderer.action(inputContext, inputAction.actionName, value);
+					var args = [inputContext, inputAction.actionName, value].concat(inputAction.params);
+					if (inputContext.renderer.action.apply(inputContext.renderer, args)) {
+						// Action returned positive - we should force a re-render
+						var element = document.getElementById(redrawElementId);
+						inputContext.renderer.render(element, inputContext.data, inputContext);
+					}
 				};
 			}
 			element = null;

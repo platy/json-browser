@@ -32,7 +32,7 @@
 	padding-left: 15%;
 	padding-right: 15%;
 	background-color: rgba(100, 100, 100, 0.3);
-	background-image: URL('chrome-extension://__MSG_@@extension_id__/renderers/images/background-stripe.png');
+	background-image: URL('images/background-stripe.png');
 }
 
 .prompt-box {
@@ -90,14 +90,14 @@
 	border: 1px solid #888;
 	border-radius: 3px;
 	background-color: #DDD;
-	background-image: URL('chrome-extension://__MSG_@@extension_id__/renderers/images/background-fade.png');
+	background-image: URL('images/background-fade.png');
 	background-repeat: repeat-x;
 	background-position: top;
 }
 
 .button:hover {
 	color: #222;
-	background-image: URL('chrome-extension://__MSG_@@extension_id__/renderers/images/background-fade-bold.png');
+	background-image: URL('images/background-fade-bold.png');
 }
 
 .button.link {

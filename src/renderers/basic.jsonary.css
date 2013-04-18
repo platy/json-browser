@@ -103,7 +103,7 @@ textarea {
 	right: 0;
 	bottom: 0;
 	left: 0;
-	background-image: URL('chrome-extension://__MSG_@@extension_id__/renderers/images/background-stripe.png');
+	background-image: URL('images/background-stripe.png');
 }
 
 .json-select-type {
@@ -115,13 +115,13 @@ textarea {
 	padding-left: 0.3em;
 	padding-right: 0.3em;
 	background-color: #DDD;
-	background-image: URL('chrome-extension://__MSG_@@extension_id__/renderers/images/background-fade.png');
+	background-image: URL('images/background-fade.png');
 	background-repeat: repeat-x;
 	background-position: top;
 }
 
 .json-select-type:hover {
-	background-image: URL('chrome-extension://__MSG_@@extension_id__/renderers/images/background-fade-bold.png');
+	background-image: URL('images/background-fade-bold.png');
 }
 
 /**** JSON Array ****/
@@ -197,13 +197,13 @@ textarea.json-string {
 	border: 1px solid #888;
 	border-radius: 3px;
 	background-color: #DDD;
-	background-image: URL('chrome-extension://__MSG_@@extension_id__/renderers/images/background-fade.png');
+	background-image: URL('images/background-fade.png');
 	background-repeat: repeat-x;
 	background-position: top;
 }
 
 .json-number-increment:hover, .json-number-decrement:hover {
-	background-image: URL('chrome-extension://__MSG_@@extension_id__/renderers/images/background-fade-bold.png');
+	background-image: URL('images/background-fade-bold.png');
 }
 
 /**** Boolean ****/
