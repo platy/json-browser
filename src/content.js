@@ -1,3 +1,4 @@
+
 function serialiseJsonaryData(data, previousState) {
   var schemaUrls = (previousState && previousState.schemas) ? previousState.schemas.slice(0) : [];
   data.schemas().each(function (index, schema) {
@@ -64,13 +65,13 @@ function addCss(element, path) {
 
 function navigateTo(itemUrl, request) {
   if (request != undefined) {
-    var singleton = document.body.childNodes[0];
-    singleton.innerHTML = "Loading...";
+    var node = document.body.childNodes[0];
+    node.innerHTML = "Loading...";
     history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
     request.getRawResponse(function (data) {
       console.log(data.referenceUrl());
       JsonBrowser.data = data;
-      Jsonary.render(singleton, JsonBrowser.data);
+      Jsonary.render(node, JsonBrowser.data);
       history.pushState(serialiseJsonaryData(JsonBrowser.data), "", itemUrl);
       data.whenSchemasStable(function () {
         // All the schemas have loaded, so save again to get the full schema list
@@ -85,7 +86,7 @@ function navigateTo(itemUrl, request) {
 }
 
 var ignoreState = true;
-window.onpopstate = function () {
+function onpopstateHandler() {
   if (history.state && history.state.json) {
     if (ignoreState && history.state.uri) {
       ignoreState = false;
@@ -99,9 +100,9 @@ window.onpopstate = function () {
     }
     console.log("Loading from saved state");
     console.log(history.state);
-    var singleton = document.body.childNodes[0];
+    var node = document.body.childNodes[0];
     JsonBrowser.data = deserialiseJsonaryData(history.state);
-    Jsonary.render(singleton, JsonBrowser.data);
+    Jsonary.render(node, JsonBrowser.data);
   }
 };
 
@@ -115,10 +116,8 @@ function isUnitialisedJson(element) {
       && looksLikeJson(element.innerText);
 }
 
-function initialiseJSONBrowser() {
-  var singleton = document.body.childNodes[0];
-  if (isUnitialisedJson(singleton)) {
-    Jsonary.addLinkPreHandler(function(link, submissionData) {
+function initialiseJSON(node) {
+  Jsonary.addLinkPreHandler(function(link, submissionData) {
       if (link.method != "GET") {
         return;
       }
@@ -140,15 +139,14 @@ function initialiseJSONBrowser() {
       return true;
     });
     var baseUri = window.location.toString();
-    var json = JSON.parse(singleton.innerText);
+    var json = JSON.parse(node.innerText);
     JsonBrowser.data = Jsonary.create(json, baseUri, true);
-    Jsonary.render(singleton, JsonBrowser.data);
+    Jsonary.render(node, JsonBrowser.data);
     addJsonCss();
     renderSchema();
     if (history.state && history.state.json) {
       history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
     }
-  }
   
   // Route all logging to the console
   Jsonary.setLogFunction(function (level, message) {
@@ -158,6 +156,17 @@ function initialiseJSONBrowser() {
   });
 }
 
-window.onload = initialiseJSONBrowser;
+function onloadHandler() {
+  var node = document.body.childNodes[0];
+  if (isUnitialisedJson(node)) {
+    console.log("JSON found, initialising JsonBrowser");
+    initialiseJSON(node);
+  }
+}
+
+if (!window.onload && !window.onpopstate) {
+  window.onpopstate = onpopstateHandler;
+  window.onload = onloadHandler;
+}
 
 chrome.runtime.onMessage.addListener(onMessage);
