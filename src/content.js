@@ -38,8 +38,9 @@ function onMessage(request, sender, sendResponse) {
 
 function renderSchema() {
   var data = JsonBrowser.data;
+  data.removeSchema(schemaKey);
   var schema = JsonBrowser.schema;
-  if (data != undefined && schema != undefined && (!history.state || !history.state.json)) {
+  if (data && schema && (!history.state || !history.state.json)) {
     console.log("Reloading with schema " + schema);
 
     if (history.state && history.state.json) {
@@ -118,42 +119,44 @@ function isUnitialisedJson(element) {
 
 function initialiseJSON(node) {
   Jsonary.addLinkPreHandler(function(link, submissionData) {
-      if (link.method != "GET") {
-        return;
-      }
-      var href = link.href;
-      if (submissionData.defined()) {
-        if (href.indexOf("?") == -1) {
-          href += "?";
-        } else {
-          href += "&";
-        }
-         href += Jsonary.encodeData(submissionData.value());
-      }
-      navigateTo(href);
-      return false;
-    });
-    Jsonary.addLinkHandler(function(link, data, request) {
-      ignoreState = false;
-      navigateTo(link.href, request);
-      return true;
-    });
-    var baseUri = window.location.toString();
-    var json = JSON.parse(node.innerText);
-    JsonBrowser.data = Jsonary.create(json, baseUri, true);
-    Jsonary.render(node, JsonBrowser.data);
-    addJsonCss();
-    renderSchema();
-    if (history.state && history.state.json) {
-      history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
+    if (link.method != "GET") {
+      return;
     }
-  
+    var href = link.href;
+    if (submissionData.defined()) {
+      if (href.indexOf("?") == -1) {
+        href += "?";
+      } else {
+        href += "&";
+      }
+       href += Jsonary.encodeData(submissionData.value());
+    }
+    navigateTo(href);
+    return false;
+  });
+  Jsonary.addLinkHandler(function(link, data, request) {
+    ignoreState = false;
+    navigateTo(link.href, request);
+    return true;
+  });
+  var baseUri = window.location.toString();
+  var json = JSON.parse(node.innerText);
+  JsonBrowser.data = Jsonary.create(json, baseUri, true);
+  Jsonary.render(node, JsonBrowser.data);
+  addJsonCss();
+  renderSchema();
+  if (history.state && history.state.json) {
+    history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
+  }
+
   // Route all logging to the console
   Jsonary.setLogFunction(function (level, message) {
     if (level >= Jsonary.logLevel.WARNING) {
       console.log("Log level " + level + ": " + message);
     }
   });
+
+  chrome.runtime.sendMessage({"show" : "page_icon"});
 }
 
 function onloadHandler() {

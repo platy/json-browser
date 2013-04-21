@@ -8,6 +8,7 @@
   "permissions": [
     "tabs",
     "webRequest",
+    "storage",
     "<all_urls>"
   ],
   "page_action": {
@@ -15,8 +16,10 @@
       "19" : "logo/logo-19.png",
       "38" : "logo/logo-38.png"
     },
-    "default_title": "JSON browser"
+    "default_title" : "JSON browser",
+    "default_popup" : "popup/popup.html"
   },
+  "options_page" : "options/options.html",
   "background": {
     "scripts": ["background.js"]
   },

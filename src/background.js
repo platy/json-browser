@@ -6,7 +6,6 @@ function schemaDescriptionForResponse(details) {
 
 function onJsonPage(details, retry) {
   console.log("JSON page " + details.tabId);
-  chrome.pageAction.show(details.tabId);
   chrome.tabs.sendMessage(details.tabId, 
       schemaDescriptionForResponse(details),
       function(response) {
@@ -52,3 +51,8 @@ var filter = {
 chrome.webRequest.onCompleted.addListener(
     onCompleted, filter, ["responseHeaders"]);
 
+chrome.runtime.onMessage.addListener(
+  function(request, sender, sendResponse) {
+    chrome.pageAction.show(sender.tab.id);
+    sendResponse();
+  });
