@@ -1,8 +1,8 @@
 function Headers() {
   var headers = [];
-  headers.addHeader = function(key, value){
+  headers.addHeader = function (key, value) {
     this.push({name: key, value:value});
-  }
+  };
   return headers;
 }
 
@@ -12,33 +12,42 @@ function Response() {
 	return response;
 }
 
-describe("Background Script", function(){
-  describe("getHeader", function(){
+describe("Background Script", function (){
+  describe("getHeader", function (){
     var headers;
 
-    beforeEach(function(){
+    beforeEach(function (){
       headers = Headers();
     });
 
-    it("can pick out a header-name", function(){
+    it("can pick out a header-name", function (){
       headers.addHeader("header-name", "header-value");
       expect(getHeader(headers, "header-name"))
-          .toEqual("header-value");
+          .toEqual({body:"header-value"});
     });
   });
 
-  describe("schemaDescriptionForResponse", function(){
+  describe("schemaDescriptionForResponse", function (){
     var responseDetails;
 
-    beforeEach(function(){
+    beforeEach(function (){
       responseDetails = Response();
     });
 
-    it("returns the profile parameter of Content-Type", function(){
+    it("returns the profile parameter of Content-Type", function (){
       responseDetails.responseHeaders.addHeader(
       	  "Content-Type", "application/json; profile=http://example.com/schema.json");
       expect(schemaDescriptionForResponse(responseDetails).schemaUrl)
           .toBe("http://example.com/schema.json");
+    });
+
+    it("returns the profile parameter of Link over Content-Type", function (){
+      responseDetails.responseHeaders.addHeader(
+          "Content-Type", "application/json; profile=http://example.com/schema.json");
+      responseDetails.responseHeaders.addHeader(
+          "Link", "<schema.json>; rel=describedby");
+      expect(schemaDescriptionForResponse(responseDetails).schemaUrl)
+          .toBe("schema.json");
     });
   });
 });

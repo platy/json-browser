@@ -1,24 +1,41 @@
+function parseHeader(headerString) {
+  var headerParts = headerString.split(";");
+  var header = {body: headerParts[0]};
+  var i;
+  for (i = headerParts.length - 1; i >= 1; i--) {
+    var kv = headerParts[i].split("=");
+    header[kv[0].trim()] = kv[1];
+  }
+  return header;
+}
+
 function getHeader(headers, headerName) {
   var i;
   for (i = 0; i < headers.length; i++) {
     if (headers[i].name.toLowerCase() === headerName.toLowerCase()) {
-      return headers[i].value;
+      return parseHeader(headers[i].value);
     }
   }
-  console.error("Header " + headerName + " not found");
 }
 
 function schemaDescriptionForResponse(details) {
   var contentTypeHeader = getHeader(details.responseHeaders, "content-type");
-  var profile = contentTypeHeader.split(";")[1].split("profile=")[1];
+  var link = getHeader(details.responseHeaders, "link");
+  var profile;
+  if (link && link.rel === "describedby") {
+    profile = link.body.replace(/<([\s\S]*)>/, "$1");
+  } else {
+    profile = contentTypeHeader.profile;
+  }
   return {schemaUrl: profile};
 }
 
 function onJsonPage(details, retry) {
-  console.log("JSON page " + details.tabId);
+  var schemaUrl = schemaDescriptionForResponse(details);
+  console.log(details.tabId + " - JSON with schema : " + schemaUrl.schemaUrl);
   chrome.tabs.sendMessage(
     details.tabId,
-    schemaDescriptionForResponse(details),
+    schemaUrl,
     function (response) {
       if (response === undefined) {
         console.error("Message failed - " + chrome.runtime.lastError.message + " - " + retry + " retries remaining.");
@@ -37,16 +54,16 @@ function contentTypeIsJson(contentTypeHeader) {
     console.error("contentTypeHeader undefined");
     return false;
   }
-  console.log("contentTypeIsJson - '" + contentTypeHeader + "'");
-  return contentTypeHeader.split(";")[0].trim() === "application/json";
+  return contentTypeHeader.body === "application/json";
 }
 
 function onCompleted(details) {
-  console.log("completed");
   var headers = details.responseHeaders;
   var contentTypeHeader = getHeader(headers, "content-type");
   if (contentTypeIsJson(contentTypeHeader)) {
     onJsonPage(details, 1);
+  } else {
+    console.log(details.tabId + " - Not JSON");
   }
 }
 
