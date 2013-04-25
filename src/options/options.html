@@ -1,0 +1,39 @@
+<html>
+<head>
+  <title>JSON Browser options</title>
+  <link rel="stylesheet" type="text/css" href="chrome-bootstrap.css" />
+</head>
+<body class="frame">
+  <div class="mainview view">
+    <div class="selected">
+      <header>
+        <h1>JSON Browser Settings</h1>
+      </header>
+
+      <div class="content">
+      <section>
+        <p>
+          By default, JSON browser will load JSON files with the schema specified in the Content-Type.profile header property, for JSON files without this header (including local files) you can specify a list of schemas to try.
+        </p>
+        <p>
+          NOTE: currently this cannot be used for local schema files
+        </p>
+      </section>
+
+      <section>
+        <h3>Custom schema list: </h3>
+        <textarea id="schemas" style="width:100%;height:100"></textarea>
+      </section>
+
+      <section>
+      <div id="status"></div>
+
+      <button id="save">Save</button>
+      </section>
+    </div>
+  </div>
+</div>
+</body>
+
+<script src="options.js"></script>
+</html>
