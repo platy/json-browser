@@ -1,6 +1,6 @@
 (function () {
 	function escapeHtml(text) {
-		return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("'", "&#39;").replace('"', "&quot;");
+		return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/'/g, "&#39;").replace(/"/g, "&quot;");
 	}
 	if (window.escapeHtml == undefined) {
 		window.escapeHtml = escapeHtml;
@@ -129,6 +129,114 @@
 				schemas.createValue(function (newValue) {
 					context.data.setValue(newValue);
 				});
+				return true;
+			} else {
+				alert("Unkown action: " + actionName);
+			}
+		},
+		update: function (element, data, context, operation) {
+			return false;
+		},
+		filter: function (data) {
+			return !data.readOnly();
+		}
+	});
+
+	// Display schema switcher
+	Jsonary.render.Components.add("SCHEMA_SWITCHER");
+	Jsonary.render.register({
+		component: Jsonary.render.Components.SCHEMA_SWITCHER,
+		renderHtml: function (data, context) {
+			var result = "";
+			var fixedSchemas = data.schemas().fixed();
+			
+			context.uiState.xorSelected = [];
+			context.uiState.orSelected = [];
+			if (context.uiState.dialogOpen) {
+				result += '<div class="json-select-type-dialog-outer"><span class="json-select-type-dialog">';
+				result += context.actionHtml('close', "closeDialog");
+				var xorSchemas = fixedSchemas.xorSchemas();
+				for (var i = 0; i < xorSchemas.length; i++) {
+					var options = xorSchemas[i];
+					var inputName = context.inputNameForAction('selectXorSchema', i);
+					result += '<br><select name="' + inputName + '">';
+					for (var j = 0; j < options.length; j++) {
+						var schema = options[j];
+						schema.getFull(function (s) {schema = s;});
+						var selected = "";
+						if (data.schemas().indexOf(schema) != -1) {
+							context.uiState.xorSelected[i] = j;
+							selected = " selected";
+						}
+						result += '<option value="' + j + '"' + selected + '>' + schema.title() + '</option>'
+					}
+					result += '</select>';
+				}
+				var orSchemas = fixedSchemas.orSchemas();
+				for (var i = 0; i < orSchemas.length; i++) {
+					var options = orSchemas[i];
+					var inputName = context.inputNameForAction('selectOrSchema', i);
+					result += '<br><select name="' + inputName + '" multiple size="' + options.length + '">';
+					context.uiState.orSelected[i] = [];
+					for (var j = 0; j < options.length; j++) {
+						var schema = options[j];
+						schema.getFull(function (s) {schema = s;});
+						var selected = "";
+						if (data.schemas().indexOf(schema) != -1) {
+							context.uiState.orSelected[i][j] = true;
+							selected = " selected";
+						} else {
+							context.uiState.orSelected[i][j] = false;
+						}
+						result += '<option value="' + j + '"' + selected + '>' + schema.title() + '</option>'
+					}
+					result += '</select>';
+				}
+				result += '</span></div>';
+			}
+			if (fixedSchemas.length < data.schemas().length) {
+				result += context.actionHtml("<span class=\"json-select-type\">S</span>", "openDialog") + " ";
+			}
+			result += context.renderHtml(data);
+			return result;
+		},
+		createValue: function (context) {
+			var data = context.data;
+			var newSchemas = context.data.schemas().fixed();
+			var xorSchemas = context.data.schemas().fixed().xorSchemas();
+			for (var i = 0; i < xorSchemas.length; i++) {
+				newSchemas = newSchemas.concat([xorSchemas[i][context.uiState.xorSelected[i]]]);
+			}
+			var orSchemas = context.data.schemas().fixed().orSchemas();
+			for (var i = 0; i < orSchemas.length; i++) {
+				var options = orSchemas[i];
+				for (var j = 0; j < options.length; j++) {
+					if (context.uiState.orSelected[i][j]) {
+						newSchemas = newSchemas.concat([options[j]]);
+					}
+				}
+			}
+			newSchemas.getFull(function (sl) {newSchemas = sl;});
+			data.setValue(newSchemas.createValue());
+		},
+		action: function (context, actionName, value, arg1) {
+			if (actionName == "closeDialog") {
+				context.uiState.dialogOpen = false;
+				return true;
+			} else if (actionName == "openDialog") {
+				context.uiState.dialogOpen = true;
+				return true;
+			} else if (actionName == "selectXorSchema") {
+				context.uiState.xorSelected[arg1] = value;
+				this.createValue(context);
+				return true;
+			} else if (actionName == "selectOrSchema") {
+				context.uiState.orSelected[arg1] = [];
+				for (var i = 0; i < value.length; i++) {
+					context.uiState.orSelected[arg1][value[i]] = true;
+				}
+				this.createValue(context);
+				return true;
 			} else {
 				alert("Unkown action: " + actionName);
 			}
@@ -291,6 +399,49 @@
 		textarea.style.width = parseInt(style.width.substring(0, style.width.length - 2)) + 4 + "px";
 		textarea.style.height = parseInt(style.height.substring(0, style.height.length - 2)) + 4 + "px";
 	}
+	
+	function getText(element) {
+		var result = "";
+		for (var i = 0; i < element.childNodes.length; i++) {
+			var child = element.childNodes[i];
+			if (child.nodeType == 1) {
+				var tagName = child.tagName.toLowerCase();
+				if (tagName == "br") {
+					result += "\n";
+					continue;
+				}
+				if (child.tagName == "li") {
+					result += "\n*\t";
+				}
+				if (tagName == "p"
+					|| /^h[0-6]$/.test(tagName)
+					|| tagName == "header"
+					|| tagName == "aside"
+					|| tagName == "blockquote"
+					|| tagName == "footer"
+					|| tagName == "div"
+					|| tagName == "table"
+					|| tagName == "hr") {
+					if (result != "") {
+						result += "\n";
+					}
+				}
+				if (tagName == "td" || tagName == "th") {
+					result += "\t";
+				}
+				
+				result += getText(child);
+				
+				if (tagName == "tr") {
+					result += "\n";
+				}
+			} else if (child.nodeType == 3) {
+				result += child.nodeValue;
+			}
+		}
+		result = result.replace("\r\n", "\n");
+		return result;
+	}
 
 	// Edit string
 	Jsonary.render.register({
@@ -299,10 +450,7 @@
 			var inputName = context.inputNameForAction('new-value');
 			var valueHtml = escapeHtml(data.value()).replace('"', '&quot;');
 			var style = "";
-			if (maxLength != null && maxLength <= 100) {
-				style += "maxWidth: " + (maxLength + 1) + "ex;";
-				style += "height: 1.5em;";
-			}
+			style += "width: 90%";
 			return '<textarea class="json-string" name="' + inputName + '" style="' + style + '">'
 				+ valueHtml
 				+ '</textarea>';
@@ -313,6 +461,21 @@
 			}
 		},
 		render: function (element, data, context) {
+			//Use contentEditable
+			if (element.contentEditable !== null) {
+				element.innerHTML = '<div class="json-string json-string-content-editable">' + escapeHtml(data.value()).replace(/\n/g, "<br>") + '</div>';
+				var valueSpan = element.childNodes[0];
+				valueSpan.contentEditable = "true";
+				valueSpan.onblur = function () {
+					var newString = getText(valueSpan);
+					data.setValue(newString);
+				};
+				return;
+			}
+			
+			if (typeof window.getComputedStyle != "function") {
+				return;
+			}
 			// min/max length
 			var minLength = data.schemas().minLength();
 			var maxLength = data.schemas().maxLength();
@@ -374,6 +537,11 @@
 			element = null;
 		},
 		update: function (element, data, context, operation) {
+			if (element.contentEditable !== null) {
+				var valueSpan = element.childNodes[0];
+				valueSpan.innerHTML = escapeHtml(data.value()).replace(/\n/g, "<br>");
+				return false;
+			};
 			if (operation.action() == "replace") {
 				var textarea = null;
 				for (var i = 0; i < element.childNodes.length; i++) {

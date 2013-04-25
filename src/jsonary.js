@@ -1606,7 +1606,7 @@ Request.prototype = {
 		var thisRequest = this;
 		thisRequest.successful = true;
 		Utils.log(Utils.logLevel.STANDARD, "Request success: " + this.url);
-		var lines = headerText.split("\n");
+		var lines = headerText.replace(/\r\n/g, "\n").split("\n");
 		var headers = {};
 		var contentType = null;
 		var contentTypeParameters = {};
@@ -1621,7 +1621,14 @@ Request.prototype = {
 			}
 			// Some browsers have all parameters as lower-case, so we do this for compatability
 			//       (discovered using Dolphin Browser on an Android phone)
-			headers[keyName.toLowerCase()] = value;
+			keyName = keyName.toLowerCase();
+			if (headers[keyName] == undefined) {
+				headers[keyName] = value;
+			} else if (typeof headers[keyName] == "object") {
+				headers[keyName].push(value);
+			} else {
+				headers[keyName] = [headers[keyName], value];
+			}
 		}
 		Utils.log(Utils.logLevel.DEBUG, "headers: " + JSON.stringify(headers, null, 4));
 		var contentType = headers["content-type"].split(";")[0];
@@ -1657,6 +1664,33 @@ Request.prototype = {
 				"rel": "root"
 			};
 			thisRequest.document.raw.addLink(link);
+		}
+		
+		// Links
+		if (headers["link"]) {
+			var links = (typeof headers["link"] == "object") ? headers['link'] : [headers['link']];
+			for (var i = 0; i < links.length; i++) {
+				var link = links[i];
+				var parts = link.trim().split(";");
+				var url = parts.shift().trim();
+				url = url.substring(1, url.length - 2);
+				var linkObj = {
+					"href": url
+				};
+				for (var j = 0; j < parts.length; j++) {
+					var part = parts[j];
+					var key = part.substring(0, part.indexOf("="));
+					var value = part.substring(key.length + 1);
+					if (value.charAt(0) == '"') {
+						value = JSON.parse(value);
+					}
+					if (key == "type") {
+						key = "mediaType";
+					}
+					linkObj[key] = value;
+				}
+				thisRequest.document.raw.addLink(linkObj);
+			}
 		}
 
 		thisRequest.checkForFullResponse();
@@ -2675,8 +2709,9 @@ Data.prototype = {
 	},
 	editableCopy: function () {
 		var copy = publicApi.create(this.value(), this.document.url + "#:copy", false);
-		this.schemas().each(function (index, schema) {
-			copy.addSchema(schema);
+		var schemaKey = Utils.getUniqueKey();
+		this.schemas().fixed().each(function (index, schema) {
+			copy.addSchema(schema, schemaKey);
 		});
 		return copy;
 	},
@@ -2717,6 +2752,14 @@ Data.prototype = {
 		return this;
 	},
 	resolveUrl: function (url) {
+		var data = this;
+		while (data) {
+			var selfLink = data.getLink("self");
+			if (selfLink) {
+				return Uri.resolve(selfLink.href, url);
+			}
+			data = data.parent();
+		}
 		return this.document.resolveUrl(url);
 	},
 	get: function (path) {
@@ -2747,6 +2790,7 @@ publicApi.extendData = function (obj) {
 
 
 publicApi.create = function (rawData, baseUrl, readOnly) {
+	var rawData = (typeof rawData == "object") ? JSON.parse(JSON.stringify(rawData)) : rawData; // Hacky recursive copy
 	var definitive = baseUrl != undefined;
 	if (baseUrl != undefined && baseUrl.indexOf("#") != -1) {
 		var remainder = baseUrl.substring(baseUrl.indexOf("#") + 1);
@@ -2812,23 +2856,29 @@ Schema.prototype = {
 	referenceUrl: function () {
 		return this.data.referenceUrl();
 	},
-	isComplete: function () {
+	isFull: function () {
 		var refUrl = this.data.propertyValue("$ref");
 		return refUrl === undefined;
 	},
 	getFull: function (callback) {
 		var refUrl = this.data.propertyValue("$ref");
 		if (refUrl === undefined) {
-			callback(this, undefined);
-			return;
+			if (callback) {
+				callback.call(this, this, undefined);
+			}
+			return this;
 		}
 		refUrl = this.data.resolveUrl(refUrl);
 		if (refUrl.charAt(0) == "#" && (refUrl.length == 1 || refUrl.charAt(1) == "/")) {
 			var documentRoot = this.data.document.root;
 			var pointerPath = decodeURIComponent(refUrl.substring(1));
 			var schema = documentRoot.subPath(pointerPath).asSchema();
-			callback.call(schema, schema, null);
-		} else {
+			if (callback) {
+				callback.call(schema, schema, null);
+			} else {
+				return schema;
+			}
+		} else if (callback) {
 			getSchema(refUrl, callback);
 		}
 		return this;
@@ -3010,12 +3060,25 @@ Schema.prototype = {
 		}
 		return result;
 	},
-	equals: function (otherSchema) {
-		if (this === otherSchema) {
+	equals: function (otherSchema, resolveRef) {
+		var thisSchema = this;
+		if (resolveRef) {
+			otherSchema = otherSchema.getFull();
+			thisSchema = this.getFull();
+		}
+		if (thisSchema === otherSchema) {
 			return true;
 		}
-		if (this.referenceUrl() !== undefined && otherSchema.referenceUrl() !== undefined) {
-			return this.referenceUrl() === otherSchema.referenceUrl();
+		var thisRefUrl = thisSchema.referenceUrl();
+		var otherRefUrl = otherSchema.referenceUrl();
+		if (resolveRef && !thisSchema.isFull()) {
+			thisRefUrl = thisSchema.data.resolveUrl(this.data.propertyValue("$ref"));
+		}
+		if (resolveRef && !otherSchema.isFull()) {
+			otherRefUrl = otherSchema.data.resolveUrl(otherSchema.data.propertyValue("$ref"));
+		}
+		if (thisRefUrl !== undefined && otherRefUrl !== undefined) {
+			return thisRefUrl === otherRefUrl;
 		}
 		return this.data.equals(otherSchema.data);
 	},
@@ -3130,6 +3193,7 @@ Schema.prototype = {
 };
 Schema.prototype.basicTypes = Schema.prototype.types;
 Schema.prototype.extendSchemas = Schema.prototype.andSchemas;
+Schema.prototype.isComplete = Schema.prototype.isFull;
 
 publicApi.extendSchema = function (obj) {
 	for (var key in obj) {
@@ -3248,11 +3312,10 @@ PotentialLink.prototype = {
 			} else if (candidateData.basicType() == "array" && isIndex(key)) {
 				subData = candidateData.index(key);
 			}
-			if (subData == undefined) {
+			if (subData == undefined || !subData.defined()) {
 				return false;
 			}
-			basicType = subData.basicType();
-			if (basicType != "string" && basicType != "number" && basicType != "integer") {
+			if (subData.basicType() == "null") {
 				return false;
 			}
 		}
@@ -3313,7 +3376,17 @@ function ActiveLink(rawLink, potentialLink, data) {
 	}
 
 	this.rel = rawLink.rel;
-	this.method = (rawLink.method != undefined) ? rawLink.method : "GET";
+	if (rawLink.method != undefined) {
+		this.method = rawLink.method;
+	} else if (rawLink.rel == "edit") {
+		this.method = "PUT"
+	} else if (rawLink.rel == "create") {
+		this.method = "POST"
+	} else if (rawLink.rel == "delete") {
+		this.method = "DELETE"
+	} else {
+		this.method = "GET";
+	}
 	if (rawLink.enctype != undefined) {
 		rawLink.encType = rawLink.enctype;
 		delete rawLink.enctype;
@@ -3988,10 +4061,10 @@ var ALL_TYPES_DICT = {
 	"object": true
 };
 SchemaList.prototype = {
-	indexOf: function (schema) {
+	indexOf: function (schema, resolveRef) {
 		var i = this.length - 1;
 		while (i >= 0) {
-			if (schema.equals(this[i])) {
+			if (schema.equals(this[i], resolveRef)) {
 				return i;
 			}
 			i--;
@@ -4327,77 +4400,162 @@ SchemaList.prototype = {
 			return values;
 		}
 	},
-	allCombinations: function () {
+	allCombinations: function (callback) {
+		if (callback && !this.isFull()) {
+			this.getFull(function (full) {
+				full.allCombinations(callback);
+			});
+			return [];
+		}
+		var thisSchemaSet = this;
+		// This is a little inefficient
 		var xorSchemas = this.xorSchemas();
 		for (var i = 0; i < xorSchemas.length; i++) {
 			var found = false;
 			for (var optionNum = 0; optionNum < xorSchemas[i].length; optionNum++) {
 				var option = xorSchemas[i][optionNum];
-				if (this.indexOf(option) >= 0) {
+				if (this.indexOf(option, !!callback) >= 0) {
 					found = true;
 					break;
 				}
 			}
 			if (!found) {
 				var result = [];
+				var pending = 1;
+				var gotResult = function() {
+					pending--;
+					if (pending <= 0) {
+						callback(result);
+					}
+				};
 				for (var optionNum = 0; optionNum < xorSchemas[i].length; optionNum++) {
 					var option = xorSchemas[i][optionNum];
-					var subCombos = this.concat([option]).allCombinations();
-					result = result.concat(subCombos);
+					if (callback) {
+						pending++;
+						this.concat([option]).allCombinations(function (subCombos) {
+							result = result.concat(subCombos);
+							gotResult();
+						});
+					} else {
+						var subCombos = this.concat([option]).allCombinations();
+						result = result.concat(subCombos);
+					}
+				}
+				if (callback) {
+					gotResult();
 				}
 				return result;
 			}
 		}
 		
 		var orSchemas = this.orSchemas();
-		var totalCombos = [[]]
+		var totalCombos = null;
+		var orSelectionOptionSets = [];
+		var orPending = 1;
+		function gotOrResult() {
+			orPending--;
+			if (orPending <= 0) {
+				var totalCombos = [new SchemaList([])];
+				for (var optionSetIndex = 0; optionSetIndex < orSelectionOptionSets.length; optionSetIndex++) {
+					var optionSet = orSelectionOptionSets[optionSetIndex];
+					var newTotalCombos = [];
+					for (var optionIndex = 0; optionIndex < optionSet.length; optionIndex++) {
+						for (var comboIndex = 0; comboIndex < totalCombos.length; comboIndex++) {
+							newTotalCombos.push(totalCombos[comboIndex].concat(optionSet[optionIndex]));
+						}
+					}
+					totalCombos = newTotalCombos;
+				}
+				for (var i = 0; i < totalCombos.length; i++) {
+					totalCombos[i] = thisSchemaSet.concat(totalCombos[i]);
+				}
+				
+				callback(totalCombos);
+			}
+		};
 		for (var i = 0; i < orSchemas.length; i++) {
-			var remaining = [];
-			var found = false;
-			for (var optionNum = 0; optionNum < orSchemas[i].length; optionNum++) {
-				var option = orSchemas[i][optionNum];
-				if (this.indexOf(option) == -1) {
-					remaining.push(option);
-				} else {
-					found = true;
-				}
-			}
-			if (remaining.length > 0) {
-				var combos = [[]];
-				for (var remNum = 0; remNum < remaining.length; remNum++) {
-					var newCombos = [];
-					for (var combNum = 0; combNum < combos.length; combNum++) {
-						newCombos.push(combos[combNum]);
-						newCombos.push(combos[combNum].concat([remaining[remNum]]));
-					}
-					combos = newCombos;
-				} 
-				if (!found) {
-					combos.shift();
-				}
-				var newTotalCombos = [];
-				for (var combA = 0; combA < totalCombos.length; combA++) {
-					for (var combB = 0; combB < combos.length; combB++) {
-						newTotalCombos.push(totalCombos[combA].concat(combos[combB]));
+			(function (i) {
+				var remaining = [];
+				var found = false;
+				for (var optionNum = 0; optionNum < orSchemas[i].length; optionNum++) {
+					var option = orSchemas[i][optionNum];
+					if (thisSchemaSet.indexOf(option, !!callback) == -1) {
+						remaining.push(option);
+					} else {
+						found = true;
 					}
 				}
-				totalCombos = newTotalCombos;
+				if (remaining.length > 0) {
+					var orSelections = [[]];
+					for (var remNum = 0; remNum < remaining.length; remNum++) {
+						var newCombos = [];
+						for (var combNum = 0; combNum < orSelections.length; combNum++) {
+							newCombos.push(orSelections[combNum]);
+							newCombos.push(orSelections[combNum].concat([remaining[remNum]]));
+						}
+						orSelections = newCombos;
+					} 
+					if (!found) {
+						orSelections.shift();
+					}
+					if (callback) {
+						orSelectionOptionSets[i] = [];
+						for (var j = 0; j < orSelections.length; j++) {
+							var orSelectionSet = new SchemaList(orSelections[j]);
+							orPending++;
+							orSelectionSet.allCombinations(function (subCombos) {
+								orSelectionOptionSets[i] = orSelectionOptionSets[i].concat(subCombos);
+								gotOrResult();
+							});
+						}
+					} else {
+						orSelectionOptionSets[i] = orSelections;
+					}
+				}
+			})(i);
+		}
+		
+		var totalCombos = [new SchemaList([])];
+		for (var optionSetIndex = 0; optionSetIndex < orSelectionOptionSets.length; optionSetIndex++) {
+			var optionSet = orSelectionOptionSets[optionSetIndex];
+			var newTotalCombos = [];
+			for (var optionIndex = 0; optionIndex < optionSet.length; optionIndex++) {
+				for (var comboIndex = 0; comboIndex < totalCombos.length; comboIndex++) {
+					newTotalCombos.push(totalCombos[comboIndex].concat(optionSet[optionIndex]));
+				}
 			}
+			totalCombos = newTotalCombos;
 		}
 		for (var i = 0; i < totalCombos.length; i++) {
 			totalCombos[i] = this.concat(totalCombos[i]);
 		}
 		
+		if (callback) {
+			gotOrResult();
+		}
 		return totalCombos;
 	},
 	createValue: function(callback, ignoreChoices) {
-		if (callback != null) {
-			this.getFull(function (schemas) {
-				callback.call(this, schemas.createValue());
-			});
-			return;
-		}
 		if (!ignoreChoices) {
+			if (callback != null) {
+				this.allCombinations(function (allCombinations) {
+					function nextOption(index) {
+						if (index >= allCombinations.length) {
+							callback(undefined);
+						}
+						allCombinations[index].createValue(function (value) {
+							if (value !== undefined) {
+								callback(value);
+							} else {
+								nextOption(index + 1);
+							}
+						}, true);
+					}
+					nextOption(0);
+				});
+				return;
+			}
+			// Synchronous version
 			var allCombinations = this.allCombinations();
 			for (var i = 0; i < allCombinations.length; i++) {
 				var value = allCombinations[i].createValue(null, true);
@@ -4407,57 +4565,92 @@ SchemaList.prototype = {
 			}
 			return;
 		}
-		var candidates = [];
+
+		var basicTypes = this.basicTypes();
+		var pending = 0;
+		var chosenCandidate = undefined;
+		function gotCandidate(candidate) {
+			if (candidate !== undefined) {
+				var newBasicType = Utils.guessBasicType(candidate);
+				if (basicTypes.indexOf(newBasicType) == -1 && (newBasicType != "integer" || basicTypes.indexOf("number") == -1)) {
+					candidate = undefined;
+				}
+			}
+			if (candidate !== undefined && chosenCandidate === undefined) {
+				chosenCandidate = candidate;
+			}
+			pending--;
+			if (callback && pending <= 0) {
+				callback(chosenCandidate);
+			}
+			return chosenCandidate;
+		}
+
 		for (var i = 0; i < this.length; i++) {
 			if (this[i].hasDefault()) {
-				candidates.push(this[i].defaultValue());
+				pending++;
+				if (gotCandidate(this[i].defaultValue())) {
+					return chosenCandidate;
+				}
 			}
 		}
-		var basicTypes = this.basicTypes();
+		
 		var enumValues = this.enumValues();
 		if (enumValues != undefined) {
+			pending += enumValues.length;
 			for (var i = 0; i < enumValues.length; i++) {
-				candidates.push(enumValues[i]);
+				if (gotCandidate(enumValues[i])) {
+					return chosenCandidate;
+				}
 			}
 		} else {
+			pending += basicTypes.length;
 			for (var i = 0; i < basicTypes.length; i++) {
 				var basicType = basicTypes[i];
 				if (basicType == "null") {
-					candidates.push(null);
+					if (gotCandidate(null)) {
+						return chosenCandidate;
+					}
 				} else if (basicType == "boolean") {
-					candidates.push(true);
+					if (gotCandidate(true)) {
+						return true;
+					}
 				} else if (basicType == "integer" || basicType == "number") {
 					var candidate = this.createValueNumber();
-					if (candidate !== undefined) {
-						candidates.push(candidate);
+					if (gotCandidate(candidate)) {
+						return chosenCandidate;
 					}
 				} else if (basicType == "string") {
 					var candidate = this.createValueString();
-					if (candidate !== undefined) {
-						candidates.push(candidate);
+					if (gotCandidate(candidate)) {
+						return chosenCandidate;
 					}
 				} else if (basicType == "array") {
-					var candidate = this.createValueArray();
-					if (candidate !== undefined) {
-						candidates.push(candidate);
+					if (callback) {
+						this.createValueArray(function (candidate) {
+							gotCandidate(candidate);
+						});
+					} else {
+						var candidate = this.createValueArray();
+						if (gotCandidate(candidate)) {
+							return chosenCandidate;
+						}
 					}
 				} else if (basicType == "object") {
-					var candidate = this.createValueObject();
-					if (candidate !== undefined) {
-						candidates.push(candidate);
+					if (callback) {
+						var candidate = this.createValueObject(function (candidate) {
+							gotCandidate(candidate);
+						});
+					} else {
+						var candidate = this.createValueObject();
+						if (gotCandidate(candidate)) {
+							return chosenCandidate;
+						}
 					}
 				}
 			}
 		}
-		for (var candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
-			var candidate = candidates[candidateIndex];
-			var newBasicType = Utils.guessBasicType(candidate);
-			if (basicTypes.indexOf(newBasicType) == -1 && (newBasicType != "integer" || basicTypes.indexOf("number") == -1)) {
-				continue;
-			}
-			return candidate;
-		}
-		return;
+		return gotCandidate(chosenCandidate);
 	},
 	createValueNumber: function () {
 		var exclusiveMinimum = this.exclusiveMinimum();
@@ -4514,22 +4707,59 @@ SchemaList.prototype = {
 		var candidate = "";
 		return candidate;
 	},
-	createValueArray: function () {
+	createValueArray: function (callback) {
+		var thisSchemaSet = this;
 		var candidate = [];
 		var minItems = this.minItems();
-		if (minItems != undefined) {
-			while (candidate.length < minItems) {
-				candidate.push(this.createValueForIndex(candidate.length));
+		if (!minItems) {
+			if (callback) {
+				callback(candidate);
 			}
+			return candidate;
+		}
+		var pending = minItems;
+		for (var i = 0; i < minItems; i++) {
+			(function (i) {
+				if (callback) {
+					thisSchemaSet.createValueForIndex(i, function (value) {
+						candidate[i] = value;
+						pending--;
+						if (pending == 0) {
+							callback(candidate);
+						}
+					});
+				} else {
+					candidate[i] = thisSchemaSet.createValueForIndex(i);
+				}
+			})(i);
 		}
 		return candidate;
 	},
-	createValueObject: function () {
+	createValueObject: function (callback) {
+		var thisSchemaSet = this;
 		var candidate = {};
 		var requiredProperties = this.requiredProperties();
+		if (requiredProperties.length == 0) {
+			if (callback) {
+				callback(candidate);
+			}
+			return candidate;
+		}
+		var pending = requiredProperties.length;
 		for (var i = 0; i < requiredProperties.length; i++) {
-			var key = requiredProperties[i];
-			candidate[key] = this.createValueForProperty(key);
+			(function (key) {
+				if (callback) {
+					thisSchemaSet.createValueForProperty(key, function (value) {
+						candidate[key] = value;
+						pending--;
+						if (pending == 0) {
+							callback(candidate);
+						}
+					});
+				} else {
+					candidate[key] = thisSchemaSet.createValueForProperty(key);
+				}
+			})(requiredProperties[i]);
 		}
 		return candidate;
 	},
@@ -4573,6 +4803,14 @@ SchemaList.prototype = {
 		}
 		return result;
 	},
+	isFull: function () {
+		for (var i = 0; i < this.length; i++) {
+			if (!this[i].isFull()) {
+				return false;
+			}
+		}
+		return true;
+	},
 	getFull: function(callback) {
 		if (this.length == 0) {
 			callback.call(this, this);
@@ -4612,7 +4850,7 @@ SchemaList.prototype = {
 	formats: function () {
 		var result = [];
 		for (var i = 0; i < this.length; i++) {
-			var format = this[0].format();
+			var format = this[i].format();
 			if (format != null) {
 				result.push(format);
 			}
@@ -4636,6 +4874,14 @@ SchemaList.prototype = {
 };
 SchemaList.prototype.basicTypes = SchemaList.prototype.types;
 SchemaList.prototype.potentialLinks = SchemaList.prototype.links;
+
+publicApi.extendSchemaList = function (obj) {
+	for (var key in obj) {
+		if (SchemaList.prototype[key] == undefined) {
+			SchemaList.prototype[key] = obj[key];
+		}
+	}
+};
 
 publicApi.createSchemaList = function (schemas) {
 	if (!Array.isArray(schemas)) {
@@ -4673,6 +4919,57 @@ SchemaSet.prototype = {
 		this.updateDependenciesWithKey(key);
 		this.updateMatchesWithKey(key);
 	},
+	updateFromSelfLink: function () {
+		this.cachedLinkList = null;
+		var activeSelfLinks = [];
+		// Disable all "self" links
+		for (var schemaKey in this.links) {
+			var linkList = this.links[schemaKey];
+			for (i = 0; i < linkList.length; i++) {
+				var linkInstance = linkList[i];
+				if (linkInstance.rel() == "self") {
+					linkInstance.active = false;
+				}
+			}
+		}
+		// Recalculate all "self" links, keeping them disabled
+		for (var schemaKey in this.links) {
+			var linkList = this.links[schemaKey];
+			for (i = 0; i < linkList.length; i++) {
+				var linkInstance = linkList[i];
+				if (linkInstance.rel() == "self") {
+					linkInstance.update();
+					if (linkInstance.active) {
+						activeSelfLinks.push(linkInstance);
+						linkInstance.active = false;
+						// Reset cache again
+						this.cachedLinkList = null;
+					}
+				}
+			}
+		}
+		// Re-enable all self links that should be active
+		for (var i = 0; i < activeSelfLinks.length; i++) {
+			activeSelfLinks[i].active = true;
+		}
+
+		// Update everything except the self links
+		for (var schemaKey in this.links) {
+			var linkList = this.links[schemaKey];
+			for (i = 0; i < linkList.length; i++) {
+				var linkInstance = linkList[i];
+				if (linkInstance.rel() != "self") {
+					linkInstance.update();
+				}
+			}
+		}
+		this.dataObj.properties(function (key, child) {
+			child.addLink(null);
+		});
+		this.dataObj.items(function (index, child) {
+			child.addLink(null);
+		});
+	},
 	updateLinksWithKey: function (key) {
 		var schemaKey, i, linkList, linkInstance;
 		var linksToUpdate = [];
@@ -4686,9 +4983,19 @@ SchemaSet.prototype = {
 			}
 		}
 		if (linksToUpdate.length > 0) {
+			var updatedSelfLink = null;
 			for (i = 0; i < linksToUpdate.length; i++) {
 				linkInstance = linksToUpdate[i];
+				var oldHref = linkInstance.active ? linkInstance.rawLink.rawLink.href : null;
 				linkInstance.update();
+				var newHref = linkInstance.active ? linkInstance.rawLink.rawLink.href : null;
+				if (newHref != oldHref && linkInstance.rel() == "self") {
+					updatedSelfLink = linkInstance;
+					break;
+				}
+			}
+			if (updatedSelfLink != null) {
+				this.updateFromSelfLink(updatedSelfLink);
 			}
 			// TODO: have separate "link" listeners?
 			this.invalidateSchemaState();
@@ -4806,11 +5113,18 @@ SchemaSet.prototype = {
 		if (this.links[schemaKey] == undefined) {
 			this.links[schemaKey] = [];
 		}
+		var selfLink = null;
 		for (i = 0; i < potentialLinks.length; i++) {
 			linkInstance = new LinkInstance(this.dataObj, potentialLinks[i]);
 			this.links[schemaKey].push(linkInstance);
 			this.addMonitorForLink(linkInstance, schemaKey, schemaKeyHistory);
 			linkInstance.update();
+			if (linkInstance.active && linkInstance.rawLink.rawLink.rel == "self") {
+				selfLink = linkInstance;
+			}
+		}
+		if (selfLink != null) {
+			this.updateFromSelfLink(selfLink);
 		}
 		this.invalidateSchemaState();
 	},
@@ -4850,6 +5164,11 @@ SchemaSet.prototype = {
 		}
 	},
 	addLink: function (rawLink) {
+		if (rawLink == null) {
+			this.updateFromSelfLink();
+			this.invalidateSchemaState();
+			return;
+		}
 		var schemaKey = Utils.getUniqueKey();
 		var linkData = publicApi.create(rawLink);
 		var potentialLink = new PotentialLink(linkData);
@@ -5062,10 +5381,13 @@ function LinkInstance(dataObj, potentialLink) {
 }
 LinkInstance.prototype = {
 	update: function (key) {
-		this.active = this.potentialLink.canApplyTo(this.dataObj);
-		if (this.active) {
+		var active = this.potentialLink.canApplyTo(this.dataObj);
+		if (active) {
 			this.rawLink = this.potentialLink.linkForData(this.dataObj);
+		} else {
+			this.rawLink = null;
 		}
+		this.active = active;
 		this.updateMonitors.notify(this.active);
 	},
 	rel: function () {
@@ -5463,11 +5785,16 @@ publicApi.UriTemplate = UriTemplate;
 			return '<a href="javascript:void(0)" id="' + elementId + '" style="text-decoration: none">' + innerHtml + '</a>';
 		},
 		inputNameForAction: function (actionName) {
+			var params = [];
+			for (var i = 1; i < arguments.length; i++) {
+				params.push(arguments[i]);
+			}
 			var name = this.getElementId();
 			this.enhancementInputs[name] = {
 				inputName: name,
 				actionName: actionName,
-				context: this
+				context: this,
+				params: params
 			};
 			return name;
 		},
@@ -5537,8 +5864,23 @@ publicApi.UriTemplate = UriTemplate;
 					if (this.getAttribute("type") == "checkbox") {
 						value = this.checked;
 					}
+					if (this.tagName.toLowerCase() == "select" && this.getAttribute("multiple") != null) {
+						value = [];
+						for (var i = 0; i < this.options.length; i++) {
+							var option = this.options[i];
+							if (option.selected) {
+								value.push(option.value);
+							}
+						}						
+					}
+					var redrawElementId = inputAction.context.elementId;
 					var inputContext = inputAction.context;
-					inputContext.renderer.action(inputContext, inputAction.actionName, value);
+					var args = [inputContext, inputAction.actionName, value].concat(inputAction.params);
+					if (inputContext.renderer.action.apply(inputContext.renderer, args)) {
+						// Action returned positive - we should force a re-render
+						var element = document.getElementById(redrawElementId);
+						inputContext.renderer.render(element, inputContext.data, inputContext);
+					}
 				};
 			}
 			element = null;
@@ -5594,7 +5936,7 @@ publicApi.UriTemplate = UriTemplate;
 	Renderer.prototype = {
 		render: function (element, data, context) {
 			if (element == null) {
-				Jsonary.log(Jsonary.logLevel.ERROR, "Attempted to render to non-existent element.\n\tData path: " + data.pointerPath() + "\n\tDocument: " + data.document.url);
+				Jsonary.log(Jsonary.logLevel.WARNING, "Attempted to render to non-existent element.\n\tData path: " + data.pointerPath() + "\n\tDocument: " + data.document.url);
 				return this;
 			}
 			if (element[0] != undefined) {
@@ -5663,8 +6005,22 @@ publicApi.UriTemplate = UriTemplate;
 		var renderer = new Renderer(obj);
 		rendererLookup[renderer.uniqueId] = renderer;
 		rendererList.push(renderer);
+		return renderer;
+	}
+	function deregister(rendererId) {
+		if (typeof rendererId == "object") {
+			rendererId = rendererId.uniqueId;
+		}
+		delete rendererLookup[rendererId];
+		for (var i = 0; i < rendererList.length; i++) {
+			if (rendererList[i].uniqueId == rendererId) {
+				rendererList.splice(i, 1);
+				i--;
+			}
+		}
 	}
 	render.register = register;
+	render.deregister = deregister;
 	
 	function lookupRenderer(rendererId) {
 		return rendererLookup[rendererId];

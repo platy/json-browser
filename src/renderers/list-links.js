@@ -9,12 +9,23 @@
 			return false;
 		},
 		renderHtml: function (data, context) {
+			if (!data.readOnly()) {
+				return context.renderHtml(data);
+			}
 			var result = "";
+			if (context.uiState.editInPlace) {
+				var html = '<span class="button action">save</span>';
+				result += context.actionHtml(html, "submit");
+				var html = '<span class="button action">cancel</span>';
+				result += context.actionHtml(html, "cancel");
+				result += context.renderHtml(context.submissionData);
+				return result;
+			}
 			
 			var links = data.links();
 			for (var i = 0; i < links.length; i++) {
 				var link = links[i];
-				var html = '<span class="button link">' + Jsonary.escapeHtml(link.rel) + '</span>';
+				var html = '<span class="button link">' + Jsonary.escapeHtml(link.title || link.rel) + '</span>';
 				result += context.actionHtml(html, 'follow-link', i);
 			}
 
@@ -44,18 +55,30 @@
 					return false;
 				}
 				context.uiState.submitLink = arg1;
-				context.submissionData = Jsonary.create().addSchema(link.submissionSchemas);
-				link.submissionSchemas.createValue(function (submissionValue) {
-					context.submissionData.setValue(submissionValue);
-				});
+				if (link.method == "PUT" && link.submissionSchemas.length == 0) {
+					context.uiState.editing = context.data.editableCopy();
+					context.submissionData = context.data.editableCopy();
+				} else {
+					context.submissionData = Jsonary.create().addSchema(link.submissionSchemas);
+					link.submissionSchemas.createValue(function (submissionValue) {
+						context.submissionData.setValue(submissionValue);
+					});
+				}
+				if (link.method == "PUT") {
+					context.uiState.editInPlace = true;
+				}
 				return true;
 			} else if (actionName == "submit") {
 				var link = context.data.links()[context.uiState.submitLink];
-				delete context.uiState.submitLink;
 				link.follow(context.submissionData);
+				delete context.uiState.submitLink;
+				delete context.uiState.editInPlace;
+				delete context.submissionData;
 				return true;
 			} else {
 				delete context.uiState.submitLink;
+				delete context.uiState.editInPlace;
+				delete context.submissionData;
 				return true;
 			}
 		},
