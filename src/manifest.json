@@ -3,7 +3,7 @@
 
   "name": "JSON Browser",
   "description": "Browse a JSON web with the help of JSON schemas.",
-  "version": "0.4.4",
+  "version": "0.4.5",
 
   "permissions": [
     "tabs",
@@ -35,11 +35,11 @@
       "matches": [
         "<all_urls>" ],
       "js": [
-          "content.js",
           "jsonary.js",
           "renderers/basic.jsonary.js",
           "renderers/list-schemas.js",
-          "renderers/list-links.js"
+          "renderers/list-links.js",
+          "content.js"
           ],
       "run_at" : "document_end",
       "all_frames": false
