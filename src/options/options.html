@@ -1,13 +1,26 @@
 <html>
 <head>
   <title>JSON Browser options</title>
-  <link rel="stylesheet" type="text/css" href="chrome-bootstrap.css" />
+  <link rel="stylesheet" type="text/css" href="/style/chrome-bootstrap.css" />
+  <link rel="stylesheet" type="text/css" href="/renderers/basic.jsonary.css" />
+  <link rel="stylesheet" type="text/css" href="/renderers/common.css" />
 </head>
 <body class="frame">
+  <div class="navigation">
+    <h1>My Schemas</h1>
+    <ul class="menu">
+      <li class="selected"><a href="#" id="remote_schema_link">Remote schemas</a></li>
+    </ul>
+    <ul class="menu" id="my_schemas">
+    </ul>
+    <ul class="menu">
+      <li><button id="new">New</button></li>
+    </ul>
+  </div>
   <div class="mainview view">
-    <div class="selected">
+    <div class="selected" id="remote_schemas">
       <header>
-        <h1>JSON Browser Settings</h1>
+        <h1>Remote schemas</h1>
       </header>
 
       <div class="content">
@@ -32,8 +45,29 @@
       </section>
     </div>
   </div>
+    <div id="editor">
+      <header>
+        <h1 class="title">JSON Browser Schema editor</h1>
+      </header>
+
+      <div class="content">
+        <section class="schema_section" style="overflow-x: scroll;">
+        </section>
+
+        <section>
+          <div class="status"></div>
+
+           <button class="save">Save</button>
+        </section>
+      </div>
+    </div>
 </div>
 </body>
 
+<script type="text/javascript" src="/jsonary.js"></script>
+<script type="text/javascript" src="/renderers/basic.jsonary.js"></script>
+<script type="text/javascript" src="/renderers/list-schemas.js"></script>
+<script type="text/javascript" src="/renderers/list-links.js"></script>
 <script src="options.js"></script>
+<script src="/editor/schemaEditor.js"></script>
 </html>

@@ -32,5 +32,13 @@ function show_status(message) {
   }, 750);
 }
 
+function showRemote() {
+  clearChildClasses(document.getElementsByClassName("mainview")[0], 'div');
+  clearSelectedMenuOptions();
+  this.parentElement.setAttribute('class', 'selected');
+  document.getElementById("remote_schemas").setAttribute('class', 'selected');
+}
+
+document.getElementById("remote_schema_link").addEventListener('click', showRemote);
 document.addEventListener('DOMContentLoaded', restore_options);
 document.querySelector('#save').addEventListener('click', save_options);
