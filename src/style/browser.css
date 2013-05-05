@@ -1,0 +1,19 @@
+@charset 'UTF-8';
+
+.jsonary {
+  font-family: monospace;
+}
+
+.overlay .page.sidebar {
+  position: absolute;
+  right: 0px;
+  top: 0px;
+  width: 400px;
+  height: 99%;
+}
+
+.selectorButton {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+}

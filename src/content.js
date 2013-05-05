@@ -1,3 +1,5 @@
+var chrome, window, document, history, Jsonary;  // Gets rid of jslint errors
+
 var schemaKey = "JSON Browser";
 var ignoreState = true;
 var JsonBrowser = {};
@@ -56,6 +58,8 @@ function addJsonCss() {
   var head = document.getElementsByTagName("head")[0];
   addCss(head, "renderers/common.css");
   addCss(head, "renderers/basic.jsonary.css");
+  addCss(head, "style/browser.css");
+  addCss(head, "style/chrome-bootstrap.css");
 }
 
 function navigateTo(itemUrl, request) {
@@ -110,7 +114,7 @@ function isUnitialisedJson(element) {
       && looksLikeJson(element.innerText);
 }
 
-function initialiseJSON(node) {
+function initialiseJSON(node, json) {
   Jsonary.addLinkPreHandler(function (link, submissionData) {
     if (link.method !== "GET") {
       return;
@@ -133,7 +137,6 @@ function initialiseJSON(node) {
     return true;
   });
   var baseUri = window.location.toString();
-  var json = JSON.parse(node.innerText);
   JsonBrowser.data = Jsonary.create(json, baseUri, true);
   Jsonary.render(node, JsonBrowser.data);
   addJsonCss();
@@ -152,17 +155,61 @@ function initialiseJSON(node) {
   chrome.runtime.sendMessage({"show" : "page_icon"});
 }
 
+function openSelector() {
+  var overlay = document.createElement("div");
+  overlay.setAttribute("id", "overlay");
+  overlay.setAttribute("class", "overlay");
+  overlay.onclick = closeSelector;
+
+  var selector = document.createElement("div");
+  selector.setAttribute("id", "selector");
+  selector.setAttribute("class", "sidebar page");
+  selector.innerHTML = 
+      '<h1>Personal schemas</h1>' +
+      '<ul id="schema-list" class="highlightable">' +
+      '</ul>' +
+      '<section>Set up personal schemas on the extension options page.</section>';
+
+  overlay.appendChild(selector);
+  document.body.appendChild(overlay);
+
+  chrome.storage.sync.get({"schema_list" : [], "my_schemas" : {}}, onOptionsLoaded);
+}
+
+function closeSelector() {
+  document.body.removeChild(document.getElementById("overlay"));
+  document.body.removeChild(document.getElementById("selector"));
+}
+
 function onloadHandler() {
   var node = document.body.childNodes[0];
   if (isUnitialisedJson(node)) {
     console.log("JSON found, initialising JsonBrowser");
-    initialiseJSON(node);
+    document.body.innerHTML = "";
+
+    var browserButton = document.createElement("div");
+    browserButton.setAttribute('class', 'selectorButton');
+    browserButton.innerHTML = '<img src="' + chrome.extension.getURL("/logo/logo-19.png") + '"/>';
+    browserButton.onclick = openSelector;
+    document.body.appendChild(browserButton);
+
+    var json = JSON.parse(node.innerText);
+    var jsonary = document.createElement("div");
+    document.body.appendChild(jsonary);
+    jsonary.setAttribute('class', 'jsonary');
+    initialiseJSON(jsonary, json);
   }
 }
 
 function onMessage(request, sender, sendResponse) {
   JsonBrowser.schema = request.schemaUrl;
   renderSchema();
+}
+
+function onSchemaSelect(schema) {
+  JsonBrowser.schema = schema;
+  renderSchema();
+  closeSelector();
 }
 
 if (!window.onload && !window.onpopstate) {

@@ -41,7 +41,7 @@ SchemaEditor.saveFunction = function (editor, callback) {
     addSchemaToList(editor.title(), editor.node);
   }
   my_schemas[editor.title()] = editor.value();
-  chrome.storage.sync.set({"my_schemas" : my_schemas}, function(){
+  chrome.storage.sync.set({"my_schemas" : my_schemas}, function () {
     callback(editor);
   });
 };

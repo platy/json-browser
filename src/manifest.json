@@ -16,8 +16,7 @@
       "19" : "logo/logo-19.png",
       "38" : "logo/logo-38.png"
     },
-    "default_title" : "JSON browser",
-    "default_popup" : "popup/popup.html"
+    "default_title" : "JSON browser"
   },
   "options_page" : "options/options.html",
   "background": {
@@ -28,7 +27,10 @@
     "renderers/images/background-fade.png",
     "renderers/images/background-stripe.png",
     "renderers/basic.jsonary.css",
-    "renderers/common.css"
+    "renderers/common.css",
+    "style/browser.css",
+    "style/chrome-bootstrap.css",
+    "logo/logo-19.png"
   ],
   "content_scripts": [
     {
@@ -39,6 +41,7 @@
           "renderers/basic.jsonary.js",
           "renderers/list-schemas.js",
           "renderers/list-links.js",
+          "popup/popup.js",
           "content.js"
           ],
       "run_at" : "document_end",
