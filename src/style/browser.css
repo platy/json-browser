@@ -17,3 +17,15 @@
   right: 10px;
   top: 10px;
 }
+
+.frame .view .content {
+  width: 100%;
+}
+
+.schema_section {
+  max-width: 100%;
+}
+
+.content span {
+  word-break: break-all;
+}
