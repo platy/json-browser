@@ -178,7 +178,6 @@ function openSelector() {
 
 function closeSelector() {
   document.body.removeChild(document.getElementById("overlay"));
-  document.body.removeChild(document.getElementById("selector"));
 }
 
 function onloadHandler() {
@@ -206,10 +205,21 @@ function onMessage(request, sender, sendResponse) {
   renderSchema();
 }
 
-function onSchemaSelect(schema) {
-  JsonBrowser.schema = schema;
-  renderSchema();
-  closeSelector();
+function loadLocal(id) {
+  chrome.storage.sync.get("my_schemas", function (items){
+    var schemaObj = items.my_schemas[id];
+    JsonBrowser.schema = Jsonary.createSchema(schemaObj);
+    renderSchema();
+  });
+}
+
+function onSchemaSelect(schema, source) {
+  if ( source === 'link') {
+    JsonBrowser.schema = schema;
+    renderSchema();
+  } else if (source === 'local') {
+    loadLocal(schema);
+  }
 }
 
 if (!window.onload && !window.onpopstate) {

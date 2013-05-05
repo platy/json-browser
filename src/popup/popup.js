@@ -21,24 +21,28 @@ function onOptionsLoaded(items){
   }
   var schema_list = items.schema_list;
   for (var i = schema_list.length - 1; i >= 0; i--) {
-    addSchemaToList(schema_list[i]);
+    addSchemaToList(schema_list[i], 'link');
   }
   var my_schemas = items.my_schemas;
   for (var schema in my_schemas) {
-    addSchemaToList(schema);
+    addSchemaToList(schema, 'local');
   }
 }
 
-function addSchemaToList(schema) {
+function addSchemaToList(schema, source) {
   var list_node = document.getElementById("schema-list");
   var li = document.createElement('li');
+  var a = document.createElement('a');
   var shortenedName = schema.length > 30 ? '...'+schema.slice(-30) : schema;
-  li.innerHTML = '<a href="#" data-link="'+schema+'"><dl><dt>'+shortenedName+'</dt><dd>'+schema+'</dd></dl></a>';
+  a.href = '#';
+  a.innerHTML = '<dl><dt>'+shortenedName+'</dt><dd>'+schema+'</dd></dl>';
+  a.schema = schema;
+  a.source = source;
+  li.appendChild(a);
   li.children[0].addEventListener('click', onSchemaClick);
   list_node.appendChild(li);
 }
 
 function onSchemaClick() {
-  var schema = this.getAttribute('data-link');
-  window.onSchemaSelect(schema);
+  window.onSchemaSelect(this.schema, this.source);
 }
