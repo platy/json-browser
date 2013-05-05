@@ -10,6 +10,7 @@
   top: 0px;
   width: 400px;
   height: 99%;
+  overflow-y: scroll;
 }
 
 .selectorButton {
@@ -27,5 +28,5 @@
 }
 
 .content span {
-  word-break: break-all;
+  display: block;
 }
