@@ -22,20 +22,26 @@ function schemaDescriptionForResponse(details) {
   var contentTypeHeader = getHeader(details.responseHeaders, "content-type");
   var link = getHeader(details.responseHeaders, "link");
   var profile;
-  if (link && link.rel === "describedby") {
-    profile = link.body.replace(/<([\s\S]*)>/, "$1");
-  } else {
-    profile = contentTypeHeader.profile;
+  var schema = {"$ref": profile};
+  if (link) {
+    schema["links"] = [
+      {
+        rel: link.rel,
+        href: link.body.replace(/<([\s\S]*)>/, "$1")
+      }];
   }
-  return {schemaUrl: profile};
+  if (contentTypeHeader.profile) {
+    schema["$ref"] = contentTypeHeader.profile;
+  }
+  return schema;
 }
 
 function onJsonPage(details, retry) {
-  var schemaUrl = schemaDescriptionForResponse(details);
-  console.log(details.tabId + " - JSON with schema : " + schemaUrl.schemaUrl);
+  var schemaDesc = schemaDescriptionForResponse(details);
+  console.log(details.tabId + " - JSON with schema : " + schemaDesc["$ref"]);
   chrome.tabs.sendMessage(
     details.tabId,
-    schemaUrl,
+    {"schema": schemaDesc},
     function (response) {
       if (response === undefined) {
         console.error("Message failed - " + chrome.runtime.lastError.message + " - " + retry + " retries remaining.");
