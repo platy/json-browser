@@ -10,25 +10,27 @@ function parseHeader(headerString) {
 }
 
 function getHeader(headers, headerName) {
+  var headerArray = []
   var i;
   for (i = 0; i < headers.length; i++) {
     if (headers[i].name.toLowerCase() === headerName.toLowerCase()) {
-      return parseHeader(headers[i].value);
+      headerArray.push(parseHeader(headers[i].value));
     }
   }
+  return headerArray;
 }
 
 function schemaDescriptionForResponse(details) {
-  var contentTypeHeader = getHeader(details.responseHeaders, "content-type");
-  var link = getHeader(details.responseHeaders, "link");
+  var contentTypeHeader = getHeader(details.responseHeaders, "content-type")[0];
+  var links = getHeader(details.responseHeaders, "link");
   var profile;
-  var schema = {"$ref": profile};
-  if (link) {
-    schema["links"] = [
+  var schema = {"$ref": profile, "links": []};
+  for (var link in links) {
+    schema["links"].push(
       {
         rel: link.rel,
         href: link.body.replace(/<([\s\S]*)>/, "$1")
-      }];
+      });
   }
   if (contentTypeHeader.profile) {
     schema["$ref"] = contentTypeHeader.profile;
@@ -65,7 +67,7 @@ function contentTypeIsJson(contentTypeHeader) {
 
 function onCompleted(details) {
   var headers = details.responseHeaders;
-  var contentTypeHeader = getHeader(headers, "content-type");
+  var contentTypeHeader = getHeader(headers, "content-type")[0];
   if (contentTypeIsJson(contentTypeHeader)) {
     onJsonPage(details, 1);
   } else {
