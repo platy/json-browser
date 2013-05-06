@@ -201,7 +201,7 @@ function onloadHandler() {
 }
 
 function onMessage(request, sender, sendResponse) {
-  JsonBrowser.schema = request.schemaUrl;
+  JsonBrowser.schema = Jsonary.createSchema(request.schema);
   renderSchema();
 }
 

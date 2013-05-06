@@ -10,32 +10,40 @@ function parseHeader(headerString) {
 }
 
 function getHeader(headers, headerName) {
+  var headerArray = []
   var i;
   for (i = 0; i < headers.length; i++) {
     if (headers[i].name.toLowerCase() === headerName.toLowerCase()) {
-      return parseHeader(headers[i].value);
+      headerArray.push(parseHeader(headers[i].value));
     }
   }
+  return headerArray;
 }
 
 function schemaDescriptionForResponse(details) {
-  var contentTypeHeader = getHeader(details.responseHeaders, "content-type");
-  var link = getHeader(details.responseHeaders, "link");
+  var contentTypeHeader = getHeader(details.responseHeaders, "content-type")[0];
+  var links = getHeader(details.responseHeaders, "link");
   var profile;
-  if (link && link.rel === "describedby") {
-    profile = link.body.replace(/<([\s\S]*)>/, "$1");
-  } else {
-    profile = contentTypeHeader.profile;
+  var schema = {"$ref": profile, "links": []};
+  for (var link in links) {
+    schema["links"].push(
+      {
+        rel: link.rel,
+        href: link.body.replace(/<([\s\S]*)>/, "$1")
+      });
   }
-  return {schemaUrl: profile};
+  if (contentTypeHeader.profile) {
+    schema["$ref"] = contentTypeHeader.profile;
+  }
+  return schema;
 }
 
 function onJsonPage(details, retry) {
-  var schemaUrl = schemaDescriptionForResponse(details);
-  console.log(details.tabId + " - JSON with schema : " + schemaUrl.schemaUrl);
+  var schemaDesc = schemaDescriptionForResponse(details);
+  console.log(details.tabId + " - JSON with schema : " + schemaDesc["$ref"]);
   chrome.tabs.sendMessage(
     details.tabId,
-    schemaUrl,
+    {"schema": schemaDesc},
     function (response) {
       if (response === undefined) {
         console.error("Message failed - " + chrome.runtime.lastError.message + " - " + retry + " retries remaining.");
@@ -59,7 +67,7 @@ function contentTypeIsJson(contentTypeHeader) {
 
 function onCompleted(details) {
   var headers = details.responseHeaders;
-  var contentTypeHeader = getHeader(headers, "content-type");
+  var contentTypeHeader = getHeader(headers, "content-type")[0];
   if (contentTypeIsJson(contentTypeHeader)) {
     onJsonPage(details, 1);
   } else {
