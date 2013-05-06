@@ -5,10 +5,13 @@ function SchemaEditor(node, json) {
   this.data = Jsonary.create(json);
   this.data.addSchema("http://json-schema.org/hyper-schema");
   Jsonary.render(node.getElementsByClassName("schema_section")[0], this.data);
-  var saveButton = this.node.getElementsByClassName('save')[0];
   node.getElementsByClassName('title')[0].innerHTML = this.title();
+  var saveButton = this.node.getElementsByClassName('save')[0];
+  var downloadButton = this.node.getElementsByClassName('download')[0];
   saveButton.addEventListener('click', this.save);
+  downloadButton.addEventListener('click', this.download);
   saveButton.editor = this;
+  downloadButton.editor = this;
 }
 
 SchemaEditor.prototype.value = function () {
@@ -34,6 +37,10 @@ SchemaEditor.prototype.save = function () {
   });
 };
 
+SchemaEditor.prototype.download = function () {
+  window.location.href = "data:application/octet-stream," + JSON.stringify(this.editor.value());
+};
+
 
 // Saves options to localStorage.
 SchemaEditor.saveFunction = function (editor, callback) {
@@ -55,17 +62,29 @@ function new_schema() {
 
 function onSchemaSelect() {
   clearChildClasses(document.getElementsByClassName("mainview")[0], 'div');
-  var schema_title = this.getAttribute('data-link');
+  var schema_title = this.parentElement.schemaId;
   clearSelectedMenuOptions();
   this.parentElement.setAttribute('class', 'selected');
   this.parentElement.editorNode.setAttribute('class', 'selected');
 }
 
+function onSchemaDelete() {
+  var menuItem = this.parentElement;
+  if (window.confirm("Delete schema '" + menuItem.schemaId + "'")) {
+    my_schemas[menuItem.schemaId] = undefined;
+    chrome.storage.sync.set({"my_schemas" : my_schemas}, function () {
+      menuItem.parentElement.removeChild(menuItem);
+    });
+  }
+}
+
 function addSchemaToList(schema, editorNode) {
   var list_node = document.getElementById("my_schemas");
   var li = document.createElement('li');
-  li.innerHTML = '<a href="#" data-link="'+schema+'">'+schema+'</a>';
+  li.innerHTML = '<a href="#">'+schema+'</a><a class="delete">Delete</a>';
   li.children[0].addEventListener('click', onSchemaSelect);
+  li.children[1].addEventListener('click', onSchemaDelete)
+  li.schemaId = schema;
   li.editorNode = editorNode;
   list_node.appendChild(li);
 }
