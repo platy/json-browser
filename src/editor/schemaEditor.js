@@ -4,22 +4,51 @@ function SchemaEditor(node, json) {
   this.node = node;
   this.data = Jsonary.create(json);
   this.data.addSchema("http://json-schema.org/hyper-schema");
-  Jsonary.render(node.getElementsByClassName("schema_section")[0], this.data);
-  node.getElementsByClassName('title')[0].innerHTML = this.title();
+  Jsonary.render(node.getElementsByClassName("structure")[0], this.data);
+  this.node.getElementsByClassName('title')[0].innerHTML = this.title();
+
+  this.rawTextArea = node.getElementsByTagName('textarea')[0];
+  this.rawTextArea.value = JSON.stringify(json, null, 2);
+  this.value = SchemaEditor.prototype.rawValue;
+
   var saveButton = this.node.getElementsByClassName('save')[0];
-  var downloadButton = this.node.getElementsByClassName('download')[0];
   saveButton.addEventListener('click', this.save);
-  downloadButton.addEventListener('click', this.download);
   saveButton.editor = this;
+  var downloadButton = this.node.getElementsByClassName('download')[0];
+  downloadButton.addEventListener('click', this.download);
   downloadButton.editor = this;
+  var structureButton = this.node.getElementsByClassName('structure_button')[0];
+  structureButton.addEventListener('click', this.showStructure);
+  structureButton.editor = this;
+  var rawButton = this.node.getElementsByClassName('raw_button')[0];
+  rawButton.addEventListener('click', this.showRaw);
+  rawButton.editor = this;
 }
 
-SchemaEditor.prototype.value = function () {
+SchemaEditor.prototype.showStructure = function() {
+  var editor = this.editor;
+  editor.node.setAttribute('class', 'selected show_structure');
+  editor.data.document.setRaw(editor.value());
+  editor.value = SchemaEditor.prototype.structureValue;
+}
+
+SchemaEditor.prototype.showRaw = function() {
+  var editor = this.editor;
+  editor.node.setAttribute('class', 'selected');
+  editor.rawTextArea.value = JSON.stringify(editor.value(), null, 2);
+  editor.value = SchemaEditor.prototype.rawValue;
+}
+
+SchemaEditor.prototype.structureValue = function () {
   return this.data.value();
 };
 
+SchemaEditor.prototype.rawValue = function () {
+  return JSON.parse(this.rawTextArea.value);
+};
+
 SchemaEditor.prototype.title = function () {
-  return this.value().title;
+  return this.data.value().title;
 };
 
 SchemaEditor.prototype.show_status = function (message) {
@@ -103,7 +132,7 @@ function clearChildClasses(node, tagName) {
 }
 
 // Restores state to saved value from localStorage.
-function restore_options() {
+function restore_local_schemas() {
   chrome.storage.sync.get({"my_schemas" : {}}, function (items){
   if (chrome.runtime.lastError) {
     alert("Error : " + chrome.runtime.lastError);
@@ -128,5 +157,5 @@ function restore_options() {
 }
 
 
-document.addEventListener('DOMContentLoaded', restore_options);
+document.addEventListener('DOMContentLoaded', restore_local_schemas);
 document.querySelector('#new').addEventListener('click', new_schema);

@@ -23,10 +23,24 @@
   width: 100%;
 }
 
-.schema_section {
-  max-width: 100%;
+.content span {
+  display: inline-block;
 }
 
-.content span {
+.schema_structure {
+  max-width: 100%;
+  display: none;
+}
+
+.show_structure .schema_structure {
   display: block;
+}
+
+.show_structure .schema_raw {
+  display: none;
+}
+
+.schema_raw textarea {
+  min-width: 550px;
+  min-height: 400px;
 }
