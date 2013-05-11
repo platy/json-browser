@@ -28,8 +28,8 @@ function schemaDescriptionForResponse(details) {
   for (var link in links) {
     schema["links"].push(
       {
-        rel: link.rel,
-        href: link.body.replace(/<([\s\S]*)>/, "$1")
+        rel: links[link].rel.replace(/"([\s\S]*)"/, "$1"),
+        href: links[link].body.replace(/<([\s\S]*)>/, "$1")
       });
   }
   if (contentTypeHeader.profile) {
