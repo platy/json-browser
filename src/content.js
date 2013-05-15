@@ -64,7 +64,7 @@ function addJsonCss() {
 
 function navigateTo(itemUrl, request) {
   if (request !== undefined) {
-    var node = document.body.childNodes[0];
+    var node = findTargetNode();
     node.innerHTML = "Loading...";
     history.replaceState(serialiseJsonaryData(JsonBrowser.data, history.state), "", window.location.toString());
     request.getRawResponse(function (data) {
@@ -84,6 +84,18 @@ function navigateTo(itemUrl, request) {
   }
 }
 
+function findTargetNode() {
+    var node = null;
+    for (var i = 0; i < document.body.childNodes.length; i++) {
+        var childNode = document.body.childNodes[i];
+        if (childNode.className == "jsonary") {
+          node = childNode;
+          break;
+        }
+    }
+    return node;
+}
+
 function onpopstateHandler() {
   if (history.state && history.state.json) {
     if (ignoreState && history.state.uri) {
@@ -98,7 +110,7 @@ function onpopstateHandler() {
     }
     console.log("Loading from saved state");
     console.log(history.state);
-    var node = document.body.childNodes[0];
+    var node = findTargetNode();
     JsonBrowser.data = deserialiseJsonaryData(history.state);
     Jsonary.render(node, JsonBrowser.data);
   }
