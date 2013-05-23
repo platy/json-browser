@@ -1,7 +1,21 @@
 @charset 'UTF-8';
 
+#overlay {
+  font-size: 75%;
+}
+
 .jsonary {
-  font-family: monospace;
+  font-family: monaco, monospace;
+  font-size: 0.85em;
+}
+
+.jsonary .button {
+	font-family: Trebuchet MS, sans-serif;
+	font-size: 0.8em;
+}
+
+table, tr, td {
+	font-size: inherit;
 }
 
 .overlay .page.sidebar {

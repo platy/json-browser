@@ -1,8 +1,10 @@
 body {
   font-family: 'Chrome Droid Sans', 'Droid Sans Fallback', 'Lucida Grande', sans-serif;
-  font-size: 75%;
   cursor: default;
   margin: 0;
+}
+body.frame {
+  font-size: 75%;
 }
 a {
   border: none;
