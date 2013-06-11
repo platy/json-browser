@@ -1,3 +1,6 @@
+// Whether Accept request header should be set to json
+var acceptJson = false;
+
 function parseHeader(headerString) {
   var headerParts = headerString.split(";");
   var header = {body: headerParts[0]};
@@ -65,6 +68,7 @@ function contentTypeIsJson(contentTypeHeader) {
   return contentTypeHeader.body === "application/json";
 }
 
+// Check for json in response to load schema from headers
 function onCompleted(details) {
   var headers = details.responseHeaders;
   var contentTypeHeader = getHeader(headers, "content-type")[0];
@@ -75,15 +79,43 @@ function onCompleted(details) {
   }
 }
 
+// Set Accept header
+function onBeforeSendHeaders(details) {
+  if (acceptJson) {
+    var headers = details.requestHeaders;
+    for (var i = headers.length - 1; i >= 0; i--)
+      if(headers[i].name === "Accept")
+        headers[i].value = "application/json";
+    return {requestHeaders: headers};
+  }
+}
+
 var filter = {
   urls: ["<all_urls>"],
   types: ["main_frame"]
 };
 
+chrome.webRequest.onBeforeSendHeaders.addListener(
+  onBeforeSendHeaders,
+  filter,
+  ["requestHeaders", "blocking"]
+);
+
 chrome.webRequest.onCompleted.addListener(
   onCompleted,
   filter,
   ["responseHeaders"]
+);
+
+chrome.browserAction.onClicked.addListener(
+  function(tab) {
+    acceptJson = !acceptJson;
+    chrome.tabs.update(tab.id, {url: tab.url});
+    if (acceptJson)
+      chrome.browserAction.setBadgeText({text:'json'});
+    else
+      chrome.browserAction.setBadgeText({text:''});
+  }
 );
 
 chrome.runtime.onMessage.addListener(
