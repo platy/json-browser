@@ -195,6 +195,11 @@ function closeSelector() {
 function onloadHandler() {
   var node = document.body.childNodes[0];
   if (isUnitialisedJson(node)) {
+    try {
+      var json = JSON.parse(node.innerText);
+    } catch (e) {
+      return;
+    }
     console.log("JSON found, initialising JsonBrowser");
     document.body.innerHTML = "";
 
@@ -204,7 +209,6 @@ function onloadHandler() {
     browserButton.onclick = openSelector;
     document.body.appendChild(browserButton);
 
-    var json = JSON.parse(node.innerText);
     var jsonary = document.createElement("div");
     document.body.appendChild(jsonary);
     jsonary.setAttribute('class', 'jsonary');

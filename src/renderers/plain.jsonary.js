@@ -1,7 +1,5 @@
 (function () {
-	function escapeHtml(text) {
-		return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-	}
+	var escapeHtml = Jsonary.escapeHtml;
 	if (window.escapeHtml == undefined) {
 		window.escapeHtml = escapeHtml;
 	}
@@ -11,7 +9,22 @@
 		renderHtml: function (data, context) {
 			if (!data.defined()) {
 				context.uiState.undefined = true;
-				return context.actionHtml('<span class="json-undefined-create">+ create</span>', "create");
+				var title = "add";
+				var parent = data.parent();
+				if (parent && parent.basicType() == 'array') {
+					var schemas = parent.schemas().indexSchemas(data.parentKey());
+					schemas.getFull(function (s) {
+						schemas = s;
+					});
+					title = schemas.title() || title;
+				} else if (parent && parent.basicType() == 'object') {
+					var schemas = parent.schemas().propertySchemas(data.parentKey());
+					schemas.getFull(function (s) {
+						schemas = s;
+					});
+					title = schemas.title() || data.parentKey() || title;
+				}
+				return context.actionHtml('<span class="json-undefined-create">+ ' + Jsonary.escapeHtml(title) + '</span>', "create");
 			}
 			delete context.uiState.undefined;
 			var showDelete = false;
@@ -186,18 +199,20 @@
 		renderHtml: function (data, context) {
 			var result = "";
 			var fixedSchemas = data.schemas().fixed();
-			context.uiState.xorSelected = [];
-			context.uiState.orSelected = [];
-			
+
 			var singleOption = false;
-			if (fixedSchemas.length < data.schemas().length) {
-				var orSchemas = fixedSchemas.orSchemas();
-				if (orSchemas.length == 0) {
-					var xorSchemas = fixedSchemas.xorSchemas();
+			var xorSchemas;
+			var orSchemas = fixedSchemas.orSchemas();
+			if (orSchemas.length == 0) {
+				xorSchemas = fixedSchemas.xorSchemas();
+				if (xorSchemas.length == 1) {
 					singleOption = true;
 				}
 			}
+			
 			if (singleOption) {
+				context.uiState.xorSelected = [];
+				context.uiState.orSelected = [];
 				for (var i = 0; i < xorSchemas.length; i++) {
 					var options = xorSchemas[i];
 					var inputName = context.inputNameForAction('selectXorSchema', i);
@@ -236,7 +251,6 @@
 					}
 					result += '</select>';
 				}
-				orSchemas = orSchemas || fixedSchemas.orSchemas();
 				for (var i = 0; i < orSchemas.length; i++) {
 					var options = orSchemas[i];
 					var inputName = context.inputNameForAction('selectOrSchema', i);
@@ -282,6 +296,9 @@
 			}
 			newSchemas.getFull(function (sl) {newSchemas = sl;});
 			data.setValue(newSchemas.createValue());
+			newSchemas.createValue(function (value) {
+				data.setValue(value);
+			})
 		},
 		action: function (context, actionName, value, arg1) {
 			if (actionName == "closeDialog") {
@@ -375,43 +392,49 @@
 	Jsonary.render.register({	
 		renderHtml: function (data, context) {
 			var uiState = context.uiState;
-			var result = '<table class="json-object"><tbody>';
-			data.properties(function (key, subData) {
+			var result = "";
+			result += '<fieldset class="json-object-outer">';
+			var title = data.schemas().title();
+			if (title) {
+				result += '<legend class="json-object-title">' + Jsonary.escapeHtml(title) + '</legend>';
+			}
+			result += '<table class="json-object"><tbody>';
+			var drawProperty = function (key, subData) {
 				result += '<tr class="json-object-pair">';
-				var title = subData.schemas().title();
-				if (title == "") {
-					result +=	'<td class="json-object-key"><div class="json-object-key-text">' + escapeHtml(key) + '</div></td>';
+				if (subData.defined()) {
+					var title = subData.schemas().title();
 				} else {
-					result +=	'<td class="json-object-key"><div class="json-object-key-title">' + escapeHtml(title) + '</div></td>';
+					var title = subData.parent().schemas().propertySchemas(subData.parentKey()).title();
+				}
+				if (title == "") {
+					result +=	'<td class="json-object-key"><div class="json-object-key-title">' + escapeHtml(key) + '</div></td>';
+				} else {
+					result +=	'<td class="json-object-key"><div class="json-object-key-title">' + escapeHtml(key) + '</div><div class="json-object-key-text">' + escapeHtml(title) + '</div></td>';
 				}
 				result += '<td class="json-object-value">' + context.renderHtml(subData) + '</td>';
 				result += '</tr>';
-			});
-			result += '</tbody></table>';
+			}
 			if (!data.readOnly()) {
 				var schemas = data.schemas();
+				var definedProperties = schemas.definedProperties();
 				var maxProperties = schemas.maxProperties();
-				if (maxProperties == null || maxProperties > schemas.keys().length) {
-					var addLinkHtml = "";
-					var definedProperties = schemas.definedProperties();
-					var keyFunction = function (index, key) {
-						var addHtml = '<span class="json-object-add-key">' + escapeHtml(key) + '</span>';
-						addLinkHtml += context.actionHtml(addHtml, "add-named", key);
-					};
-					for (var i = 0; i < definedProperties.length; i++) {
-						if (!data.property(definedProperties[i]).defined()) {
-							keyFunction(i, definedProperties[i]);
-						}
+				var canAdd = (maxProperties == null || maxProperties > schemas.keys().length);
+				data.properties(definedProperties, function (key, subData) {
+					if (canAdd || subData.defined()) {
+						drawProperty(key, subData);
 					}
-					if (schemas.allowedAdditionalProperties()) {
-						var newHtml = '<span class="json-object-add-key-new">+ new</span>';
-						addLinkHtml += context.actionHtml(newHtml, "add-new");
-					}
-					if (addLinkHtml != "") {
-						result += '<span class="json-object-add">add: ' + addLinkHtml + '</span>';
-					}
+				}, drawProperty);
+
+				if (canAdd && schemas.allowedAdditionalProperties()) {
+					result += '<tr class="json-object-pair"><td class="json-object-key"><div class="json-object-key-text">';
+					result += context.actionHtml('+ new', "add-new");
+					result += '</div></td><td></td></tr>';
 				}
+			} else {
+				data.properties(drawProperty);
 			}
+			result += '</table>';
+			result += '</fieldset>';
 			return result;
 		},
 		action: function (context, actionName, arg1) {
@@ -669,25 +692,22 @@
 
 	// Display/edit boolean	
 	Jsonary.render.register({
-		render: function (element, data) {
-			var valueSpan = document.createElement("a");
-			if (data.value()) {
-				valueSpan.setAttribute("class", "json-boolean-true");
-				valueSpan.innerHTML = "true";
-			} else {
-				valueSpan.setAttribute("class", "json-boolean-false");
-				valueSpan.innerHTML = "false";
+		renderHtml: function (data, context) {
+			if (data.readOnly()) {
+				if (data.value()) {
+					return '<span class="json-boolean-true">yes</span>';
+				} else {
+					return '<span class="json-boolean-false">no</span>';
+				}
 			}
-			element.appendChild(valueSpan);
-			if (!data.readOnly()) {
-				valueSpan.setAttribute("href", "#");
-				valueSpan.onclick = function (event) {
-					data.setValue(!data.value());
-					return false;
-				};
+			var result = "";
+			var inputName = context.inputNameForAction('switch');
+			return '<input type="checkbox" class="json-boolean" name="' + inputName + '" ' + (data.value() ? 'checked' : '' ) + '></input>';
+		},
+		action: function (context, actionName, arg1) {
+			if (actionName == "switch") {
+				context.data.setValue(arg1);
 			}
-			valueSpan = null;
-			element = null;
 		},
 		filter: function (data) {
 			return data.basicType() == "boolean";
