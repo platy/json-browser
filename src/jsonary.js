@@ -665,7 +665,7 @@ Uri.resolve = function(base, relative) {
 	if (!(base instanceof Uri)) {
 		base = new Uri(base);
 	}
-	result = new Uri(relative + "");
+	var result = new Uri(relative + "");
 	if (result.scheme == null) {
 		result.scheme = base.scheme;
 		result.doubleSlash = base.doubleSlash;
@@ -1972,13 +1972,12 @@ PatchOperation.prototype = {
 		if (typeof path == "object") {
 			path = path.pointerPath();
 		}
-		path += "/";
 		var minDepth = NaN;
 		if (this._subject.substring(0, path.length) == path) {
 			var remainder = this._subject.substring(path.length);
-			if (remainder == 0) {
+			if (remainder.length == 0) {
 				minDepth = 0;
-			} else {
+			} else if (remainder.charAt(0) == "/") {
 				minDepth = remainder.split("/").length;
 			}
 		}
@@ -1986,12 +1985,12 @@ PatchOperation.prototype = {
 			if (this._target.substring(0, path.length) == path) {
 				var targetDepth;
 				var remainder = this._target.substring(path.length);
-				if (remainder == 0) {
+				if (remainder.length == 0) {
 					targetDepth = 0;
-				} else {
+				} else if (remainder.charAt(0) == "/") {
 					targetDepth = remainder.split("/").length;
 				}
-				if (!(targetDepth > minDepth)) {
+				if (!isNaN(targetDepth) && targetDepth < minDepth) {
 					minDepth = targetDepth;
 				}
 			}
@@ -2113,8 +2112,8 @@ publicApi.batchDone = function () {
 function Document(url, isDefinitive, readOnly) {
 	var thisDocument = this;
 	this.readOnly = !!readOnly;
+	this.isDefinitive = !!isDefinitive;
 	this.url = url;
-	this.isDefinitive = isDefinitive;
 	this.error = null;
 
 	var rootPath = null;
@@ -2814,6 +2813,9 @@ Data.prototype = {
 			}
 		}
 		if (additionalCallback) {
+			if (typeof additionalCallback != 'function') {
+				additionalCallback = callback;
+			}
 			var dataKeys = this.keys();
 			for (var i = 0; i < dataKeys.length; i++) {
 				if (keys.indexOf(dataKeys[i]) == -1) {
@@ -3472,6 +3474,7 @@ PotentialLink.prototype = {
 		});
 		rawLink.href = publicData.resolveUrl(href);
 		rawLink.rel = rawLink.rel.toLowerCase();
+		rawLink.title = rawLink.title;
 		return new ActiveLink(rawLink, this, publicData);
 	},
 	usesKey: function (key) {
@@ -3513,6 +3516,7 @@ function ActiveLink(rawLink, potentialLink, data) {
 	}
 
 	this.rel = rawLink.rel;
+	this.title = rawLink.title;
 	if (rawLink.method != undefined) {
 		this.method = rawLink.method;
 	} else if (rawLink.rel == "edit") {
@@ -4766,7 +4770,7 @@ SchemaList.prototype = {
 				this.allCombinations(function (allCombinations) {
 					function nextOption(index) {
 						if (index >= allCombinations.length) {
-							callback(undefined);
+							return callback(undefined);
 						}
 						allCombinations[index].createValue(function (value) {
 							if (value !== undefined) {
@@ -4792,7 +4796,7 @@ SchemaList.prototype = {
 		}
 
 		var basicTypes = this.basicTypes();
-		var pending = 0;
+		var pending = 1;
 		var chosenCandidate = undefined;
 		function gotCandidate(candidate) {
 			if (candidate !== undefined) {
@@ -5891,6 +5895,7 @@ publicApi.UriTemplate = UriTemplate;
 			}
 			if (this.subContextSavedStates[labelKey]) {
 				uiStartingState = this.subContextSavedStates[labelKey];
+				delete this.subContextSavedStates[labelKey];
 			}
 			if (this.subContexts[labelKey] == undefined) {
 				var usedComponents = [];
@@ -6125,16 +6130,21 @@ publicApi.UriTemplate = UriTemplate;
 		},
 		enhanceElement: function (element) {
 			var rootElement = element;
+			// Perform post-order depth-first walk of tree, calling enhanceElementSingle() on each element
+			// Post-order reduces orphaned enhancements by enhancing all children before the parent
 			while (element) {
-				if (element.nodeType == 1) {
-					this.enhanceElementSingle(element);
-				}
 				if (element.firstChild) {
 					element = element.firstChild;
 					continue;
 				}
 				while (!element.nextSibling && element != rootElement) {
+					if (element.nodeType == 1) {
+						this.enhanceElementSingle(element);
+					}
 					element = element.parentNode;
+				}
+				if (element.nodeType == 1) {
+					this.enhanceElementSingle(element);
 				}
 				if (element == rootElement) {
 					break;
@@ -6198,7 +6208,8 @@ publicApi.UriTemplate = UriTemplate;
 		}
 	};
 	var pageContext = new RenderContext();
-	setInterval(function () {
+	
+	function cleanup() {
 		// Clean-up sweep of pageContext's element lookup
 		var keysToRemove = [];
 		for (var key in pageContext.elementLookup) {
@@ -6218,10 +6229,42 @@ publicApi.UriTemplate = UriTemplate;
 		for (var i = 0; i < keysToRemove.length; i++) {
 			delete pageContext.elementLookup[keysToRemove[i]];
 		}
-	}, 30000); // Every 30 seconds
+		for (var key in pageContext.enhancementContexts) {
+			if (pageContext.enhancementContexts[key]) {
+				var context = pageContext.enhancementContexts[key];
+				Jsonary.log(Jsonary.logLevel.WARNING, 'Orphaned context for element: ' + JSON.stringify(key)
+					+ '\ncomponents:' + context.renderer.component.join(", ")
+					+ '\ndata: ' + context.data.json());
+				pageContext.enhancementContexts[key] = null;
+			}
+		}
+		for (var key in pageContext.enhancementActions) {
+			if (pageContext.enhancementActions[key]) {
+				var context = pageContext.enhancementActions[key].context;
+				Jsonary.log(Jsonary.logLevel.WARNING, 'Orphaned action for element: ' + JSON.stringify(key)
+					+ '\ncomponents:' + context.renderer.component.join(", ")
+					+ '\ndata: ' + context.data.json());
+				pageContext.enhancementActions[key] = null;
+			}
+		}
+		for (var key in pageContext.enhancementInputs) {
+			if (pageContext.enhancementInputs[key]) {
+				var context = pageContext.enhancementInputs[key].context;
+				Jsonary.log(Jsonary.logLevel.WARNING, 'Orphaned action for input: ' + JSON.stringify(key)
+					+ '\ncomponents:' + context.renderer.component.join(", ")
+					+ '\ndata: ' + context.data.json());
+				pageContext.enhancementInputs[key] = null;
+			}
+		}
+	}
+	setInterval(cleanup, 30000); // Every 30 seconds
+	Jsonary.cleanup = cleanup;
 
 	function render(element, data, uiStartingState, contextCallback) {
-		var context = pageContext.render(element, data, null, uiStartingState, contextCallback);
+		var innerElement = document.createElement('span');
+		element.innerHTML = "";
+		element.appendChild(innerElement);
+		var context = pageContext.render(innerElement, data, null, uiStartingState, contextCallback);
 		pageContext.oldSubContexts = {};
 		pageContext.subContexts = {};
 		return context;
@@ -6272,6 +6315,22 @@ publicApi.UriTemplate = UriTemplate;
 		}
 	}
 	Renderer.prototype = {
+		updateAll: function () {
+			var elementIds = [];
+			for (var uniqueId in pageContext.elementLookup) {
+				elementIds = elementIds.concat(pageContext.elementLookup[uniqueId]);
+			}
+			for (var i = 0; i < elementIds.length; i++) {
+				var element = document.getElementById(elementIds[i]);
+				if (element == undefined) {
+					continue;
+				}
+				var context = element.jsonaryContext;
+				if (context.renderer.uniqueId = this.uniqueId) {
+					context.rerender();
+				}
+			}
+		},
 		render: function (element, data, context) {
 			if (element == null) {
 				Jsonary.log(Jsonary.logLevel.WARNING, "Attempted to render to non-existent element.\n\tData path: " + data.pointerPath() + "\n\tDocument: " + data.document.url);
