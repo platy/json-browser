@@ -110,7 +110,6 @@ chrome.webRequest.onCompleted.addListener(
 chrome.browserAction.onClicked.addListener(
   function(tab) {
     acceptJson = !acceptJson;
-    chrome.tabs.update(tab.id, {url: tab.url});
     if (acceptJson)
       chrome.browserAction.setBadgeText({text:'json'});
     else
