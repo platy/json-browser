@@ -665,7 +665,7 @@ Uri.resolve = function(base, relative) {
 	if (!(base instanceof Uri)) {
 		base = new Uri(base);
 	}
-	result = new Uri(relative + "");
+	var result = new Uri(relative + "");
 	if (result.scheme == null) {
 		result.scheme = base.scheme;
 		result.doubleSlash = base.doubleSlash;
@@ -1690,14 +1690,15 @@ Request.prototype = {
 				var link = links[i];
 				var parts = link.trim().split(";");
 				var url = parts.shift().trim();
-				url = url.substring(1, url.length - 2);
+				url = url.substring(1, url.length - 1);
 				var linkObj = {
 					"href": url
 				};
 				for (var j = 0; j < parts.length; j++) {
 					var part = parts[j];
-					var key = part.substring(0, part.indexOf("=")).trim();
+					var key = part.substring(0, part.indexOf("="));
 					var value = part.substring(key.length + 1);
+					key = key.trim();
 					if (value.charAt(0) == '"') {
 						value = JSON.parse(value);
 					}
@@ -1740,7 +1741,7 @@ Request.prototype = {
 		xhr.onreadystatechange = function () {
 			if (xhr.readyState == 4) {
 				if (xhr.status >= 200 && xhr.status < 300) {
-					var data = xhr.responseText = xhr.responseText || null;
+					var data = xhr.responseText || null;
 					try {
 						data = JSON.parse(data);
 					} catch (e) {
@@ -1972,13 +1973,12 @@ PatchOperation.prototype = {
 		if (typeof path == "object") {
 			path = path.pointerPath();
 		}
-		path += "/";
 		var minDepth = NaN;
 		if (this._subject.substring(0, path.length) == path) {
 			var remainder = this._subject.substring(path.length);
-			if (remainder == 0) {
+			if (remainder.length == 0) {
 				minDepth = 0;
-			} else {
+			} else if (remainder.charAt(0) == "/") {
 				minDepth = remainder.split("/").length;
 			}
 		}
@@ -1986,12 +1986,12 @@ PatchOperation.prototype = {
 			if (this._target.substring(0, path.length) == path) {
 				var targetDepth;
 				var remainder = this._target.substring(path.length);
-				if (remainder == 0) {
+				if (remainder.length == 0) {
 					targetDepth = 0;
-				} else {
+				} else if (remainder.charAt(0) == "/") {
 					targetDepth = remainder.split("/").length;
 				}
-				if (!(targetDepth > minDepth)) {
+				if (!isNaN(targetDepth) && targetDepth < minDepth) {
 					minDepth = targetDepth;
 				}
 			}
@@ -2113,8 +2113,8 @@ publicApi.batchDone = function () {
 function Document(url, isDefinitive, readOnly) {
 	var thisDocument = this;
 	this.readOnly = !!readOnly;
+	this.isDefinitive = !!isDefinitive;
 	this.url = url;
-	this.isDefinitive = isDefinitive;
 	this.error = null;
 
 	var rootPath = null;
@@ -2814,6 +2814,9 @@ Data.prototype = {
 			}
 		}
 		if (additionalCallback) {
+			if (typeof additionalCallback != 'function') {
+				additionalCallback = callback;
+			}
 			var dataKeys = this.keys();
 			for (var i = 0; i < dataKeys.length; i++) {
 				if (keys.indexOf(dataKeys[i]) == -1) {
@@ -3472,6 +3475,7 @@ PotentialLink.prototype = {
 		});
 		rawLink.href = publicData.resolveUrl(href);
 		rawLink.rel = rawLink.rel.toLowerCase();
+		rawLink.title = rawLink.title;
 		return new ActiveLink(rawLink, this, publicData);
 	},
 	usesKey: function (key) {
@@ -3513,6 +3517,7 @@ function ActiveLink(rawLink, potentialLink, data) {
 	}
 
 	this.rel = rawLink.rel;
+	this.title = rawLink.title;
 	if (rawLink.method != undefined) {
 		this.method = rawLink.method;
 	} else if (rawLink.rel == "edit") {
@@ -3610,6 +3615,13 @@ ActiveLink.prototype = {
 		}
 		for (var i = 0; i < handlers.length; i++) {
 			var handler = handlers[i];
+			if (typeof handler !== 'function') {
+				if (handler) {
+					continue;
+				} else {
+					break;
+				}
+			}
 			if (handler.call(this, this, submissionData, request) === false) {
 				break;
 			}
@@ -4766,7 +4778,7 @@ SchemaList.prototype = {
 				this.allCombinations(function (allCombinations) {
 					function nextOption(index) {
 						if (index >= allCombinations.length) {
-							callback(undefined);
+							return callback(undefined);
 						}
 						allCombinations[index].createValue(function (value) {
 							if (value !== undefined) {
@@ -4792,7 +4804,7 @@ SchemaList.prototype = {
 		}
 
 		var basicTypes = this.basicTypes();
-		var pending = 0;
+		var pending = 1;
 		var chosenCandidate = undefined;
 		function gotCandidate(candidate) {
 			if (candidate !== undefined) {
@@ -5406,6 +5418,11 @@ SchemaSet.prototype = {
 			this.invalidateSchemaState();
 			return;
 		}
+		if (rawLink.rel == "invalidate" || rawLink.rel == "invalidates") {
+			var invalidateUrl = this.dataObj.resolveUrl(rawLink.href);
+			publicApi.invalidate(invalidateUrl);
+			return;
+		}
 		var schemaKey = Utils.getUniqueKey();
 		var linkData = publicApi.create(rawLink);
 		var potentialLink = new PotentialLink(linkData);
@@ -5846,10 +5863,18 @@ publicApi.UriTemplate = UriTemplate;
 		rootContext: null,
 		baseContext: null,
 		subContext: function (label, uiState) {
-			if (uiState == undefined) {
-				uiState = {};
+			// TODO: for read-only, some kind of relative path?
+			if (Jsonary.isData(label)) {
+				label = "data" + label.uniqueId;
 			}
-			return this.getSubContext(this.elementId, this.data, label, uiState);
+			uiState = uiState || {};
+			var subContext = this.getSubContext(false, this.data, label, uiState);
+			subContext.renderer = this.renderer;
+			subContext.parent = this;
+			if (!subContext.uiState) {
+				subContext.loadState(subContext.uiStartingState);
+			}
+			return subContext;
 		},
 		subContextSavedStates: {},
 		saveState: function () {
@@ -5891,6 +5916,7 @@ publicApi.UriTemplate = UriTemplate;
 			}
 			if (this.subContextSavedStates[labelKey]) {
 				uiStartingState = this.subContextSavedStates[labelKey];
+				delete this.subContextSavedStates[labelKey];
 			}
 			if (this.subContexts[labelKey] == undefined) {
 				var usedComponents = [];
@@ -5925,6 +5951,9 @@ publicApi.UriTemplate = UriTemplate;
 			this.subContexts = {};
 		},
 		rerender: function () {
+			if (this.parent && !this.elementId) {
+				return this.parent.rerender();
+			}
 			var element = document.getElementById(this.elementId);
 			if (element != null) {
 				this.renderer.render(element, this.data, this);
@@ -6059,7 +6088,9 @@ publicApi.UriTemplate = UriTemplate;
 				if (element == undefined) {
 					continue;
 				}
-				var prevContext = element.jsonaryContext;
+				// If the element doesn't have a context, but update is being called, then it's probably (inadvisedly) trying to change something during its initial render.
+				// If so, check the enhancement contexts.
+				var prevContext = element.jsonaryContext || this.enhancementContexts[elementIds[i]];
 				var prevUiState = copyValue(this.uiStartingState);
 				var renderer = selectRenderer(data, prevUiState, prevContext.usedComponents);
 				if (renderer.uniqueId == prevContext.renderer.uniqueId) {
@@ -6125,16 +6156,21 @@ publicApi.UriTemplate = UriTemplate;
 		},
 		enhanceElement: function (element) {
 			var rootElement = element;
+			// Perform post-order depth-first walk of tree, calling enhanceElementSingle() on each element
+			// Post-order reduces orphaned enhancements by enhancing all children before the parent
 			while (element) {
-				if (element.nodeType == 1) {
-					this.enhanceElementSingle(element);
-				}
 				if (element.firstChild) {
 					element = element.firstChild;
 					continue;
 				}
 				while (!element.nextSibling && element != rootElement) {
+					if (element.nodeType == 1) {
+						this.enhanceElementSingle(element);
+					}
 					element = element.parentNode;
+				}
+				if (element.nodeType == 1) {
+					this.enhanceElementSingle(element);
 				}
 				if (element == rootElement) {
 					break;
@@ -6198,7 +6234,8 @@ publicApi.UriTemplate = UriTemplate;
 		}
 	};
 	var pageContext = new RenderContext();
-	setInterval(function () {
+	
+	function cleanup() {
 		// Clean-up sweep of pageContext's element lookup
 		var keysToRemove = [];
 		for (var key in pageContext.elementLookup) {
@@ -6218,10 +6255,42 @@ publicApi.UriTemplate = UriTemplate;
 		for (var i = 0; i < keysToRemove.length; i++) {
 			delete pageContext.elementLookup[keysToRemove[i]];
 		}
-	}, 30000); // Every 30 seconds
+		for (var key in pageContext.enhancementContexts) {
+			if (pageContext.enhancementContexts[key]) {
+				var context = pageContext.enhancementContexts[key];
+				Jsonary.log(Jsonary.logLevel.WARNING, 'Orphaned context for element: ' + JSON.stringify(key)
+					+ '\ncomponents:' + context.renderer.component.join(", ")
+					+ '\ndata: ' + context.data.json());
+				pageContext.enhancementContexts[key] = null;
+			}
+		}
+		for (var key in pageContext.enhancementActions) {
+			if (pageContext.enhancementActions[key]) {
+				var context = pageContext.enhancementActions[key].context;
+				Jsonary.log(Jsonary.logLevel.WARNING, 'Orphaned action for element: ' + JSON.stringify(key)
+					+ '\ncomponents:' + context.renderer.component.join(", ")
+					+ '\ndata: ' + context.data.json());
+				pageContext.enhancementActions[key] = null;
+			}
+		}
+		for (var key in pageContext.enhancementInputs) {
+			if (pageContext.enhancementInputs[key]) {
+				var context = pageContext.enhancementInputs[key].context;
+				Jsonary.log(Jsonary.logLevel.WARNING, 'Orphaned action for input: ' + JSON.stringify(key)
+					+ '\ncomponents:' + context.renderer.component.join(", ")
+					+ '\ndata: ' + context.data.json());
+				pageContext.enhancementInputs[key] = null;
+			}
+		}
+	}
+	setInterval(cleanup, 30000); // Every 30 seconds
+	Jsonary.cleanup = cleanup;
 
 	function render(element, data, uiStartingState, contextCallback) {
-		var context = pageContext.render(element, data, null, uiStartingState, contextCallback);
+		var innerElement = document.createElement('span');
+		element.innerHTML = "";
+		element.appendChild(innerElement);
+		var context = pageContext.render(innerElement, data, null, uiStartingState, contextCallback);
 		pageContext.oldSubContexts = {};
 		pageContext.subContexts = {};
 		return context;
@@ -6272,6 +6341,22 @@ publicApi.UriTemplate = UriTemplate;
 		}
 	}
 	Renderer.prototype = {
+		updateAll: function () {
+			var elementIds = [];
+			for (var uniqueId in pageContext.elementLookup) {
+				elementIds = elementIds.concat(pageContext.elementLookup[uniqueId]);
+			}
+			for (var i = 0; i < elementIds.length; i++) {
+				var element = document.getElementById(elementIds[i]);
+				if (element == undefined) {
+					continue;
+				}
+				var context = element.jsonaryContext;
+				if (context.renderer.uniqueId = this.uniqueId) {
+					context.rerender();
+				}
+			}
+		},
 		render: function (element, data, context) {
 			if (element == null) {
 				Jsonary.log(Jsonary.logLevel.WARNING, "Attempted to render to non-existent element.\n\tData path: " + data.pointerPath() + "\n\tDocument: " + data.document.url);

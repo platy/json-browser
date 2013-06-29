@@ -212,6 +212,7 @@ textarea {
 	font-variant: normal !important;
 	line-height: 1.2em !important;
 }
+
 textarea.json-string {
 	font-size: inherit;
 	font-weight: inherit;
