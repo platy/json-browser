@@ -9,9 +9,28 @@
   font-size: 0.85em;
 }
 
+/* make buttons slightly less intrusive - there are sometimes a lot of them */
 .jsonary .button {
 	font-family: Trebuchet MS, sans-serif;
 	font-size: 0.8em;
+}
+.jsonary .schema-list .button {
+	opacity: 0.7;
+}
+.jsonary .link-list .button {
+	opacity: 0.9;
+}
+.jsonary .link-list .button:hover {
+	opacity: 1;
+}
+.jsonary .schema-list .button:hover {
+	opacity: 0.85;
+}
+
+
+/* extra indent for arrays */
+.json-array-item {
+	margin-left: 1em;
 }
 
 table, tr, td {

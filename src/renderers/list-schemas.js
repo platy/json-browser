@@ -10,13 +10,17 @@
 		},
 		renderHtml: function (data, context) {
 			var result = "";
-			data.schemas().each(function (index, schema) {
-				if (schema.title() == null) {
-					return;
-				}
-				var html = '<span class="button">' + Jsonary.escapeHtml(schema.title()) + '</span>';
-				result += context.actionHtml(html, 'view-schema', index);
-			});
+			if (data.schemas().length) {
+				result += '<span class="schema-list">';
+				data.schemas().each(function (index, schema) {
+					if (schema.title() == null) {
+						return;
+					}
+					var html = '<span class="button">' + Jsonary.escapeHtml(schema.title()) + '</span>';
+					result += context.actionHtml(html, 'view-schema', index);
+				});
+				result += '</span>';
+			}
 			if (context.uiState.viewSchema != undefined) {
 				var schema = data.schemas()[context.uiState.viewSchema];
 				result += '<div class="prompt-outer"><div class="prompt-inner">';
