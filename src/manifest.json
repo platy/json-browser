@@ -3,7 +3,7 @@
 
   "name": "JSON Browser",
   "description": "Browse a JSON web with the help of JSON schemas.",
-  "version": "0.5",
+  "version": "0.6",
 
   "permissions": [
     "tabs",
