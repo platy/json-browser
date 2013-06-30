@@ -21,7 +21,7 @@ function serialiseJsonaryData(data, previousState) {
 }
 
 function deserialiseJsonaryData(state) {
-  var i, data = Jsonary.create(JSON.parse(state.json), state.uri, true);
+  var i, data = Jsonary.create(JSON.parse(state.json), state.uri.split('#')[0], true);
   for (i = 0; i < state.schemas.length; i++) {
     var schemaUri = state.schemas[i];
     if (schemaUri) {
@@ -58,6 +58,7 @@ function addJsonCss() {
   var head = document.getElementsByTagName("head")[0];
   addCss(head, "renderers/common.css");
   addCss(head, "renderers/basic.jsonary.css");
+  addCss(head, "renderers/highlight-fragment.css");
   addCss(head, "style/browser.css");
   addCss(head, "style/chrome-bootstrap.css");
 }
@@ -148,7 +149,7 @@ function initialiseJSON(node, json) {
     navigateTo(link.href, request);
     return true;
   });
-  var baseUri = window.location.toString();
+  var baseUri = window.location.toString().split('#')[0];
   JsonBrowser.data = Jsonary.create(json, baseUri, true);
   Jsonary.render(node, JsonBrowser.data);
   addJsonCss();
@@ -242,4 +243,9 @@ if (!window.onload && !window.onpopstate) {
   window.onpopstate = onpopstateHandler;
   window.onload = onloadHandler;
   chrome.runtime.onMessage.addListener(onMessage);
+  window.onhashchange = function () {
+    console.log("Fragment change - rerendering");
+    var node = findTargetNode();
+    Jsonary.render(node, JsonBrowser.data);
+  }
 }
