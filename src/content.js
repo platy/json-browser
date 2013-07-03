@@ -214,6 +214,11 @@ function onloadHandler() {
     document.body.appendChild(jsonary);
     jsonary.setAttribute('class', 'jsonary');
     initialiseJSON(jsonary, json);
+    window.onhashchange = function () {
+      console.log("Fragment change - rerendering");
+      var node = findTargetNode();
+      Jsonary.render(node, JsonBrowser.data);
+    }
   }
 }
 
@@ -243,9 +248,4 @@ if (!window.onload && !window.onpopstate) {
   window.onpopstate = onpopstateHandler;
   window.onload = onloadHandler;
   chrome.runtime.onMessage.addListener(onMessage);
-  window.onhashchange = function () {
-    console.log("Fragment change - rerendering");
-    var node = findTargetNode();
-    Jsonary.render(node, JsonBrowser.data);
-  }
 }
