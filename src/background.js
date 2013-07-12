@@ -4,7 +4,7 @@ function parseHeader(headerString) {
   var i;
   for (i = headerParts.length - 1; i >= 1; i--) {
     var kv = headerParts[i].split("=");
-    header[kv[0].trim()] = kv[1];
+    header[kv[0].trim()] = kv.slice(1).join('=');
   }
   return header;
 }
