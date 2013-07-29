@@ -28,7 +28,7 @@
 				for (var i = 0; i < links.length; i++) {
 					var link = links[i];
 					var html = '<span class="button link">' + Jsonary.escapeHtml(link.title || link.rel) + '</span>';
-					result += context.actionHtml(html, 'follow-link', i);
+					result += context.actionHtml(html, false, link.href, 'follow-link', i);
 				}
 				result += '</span>';
 			}
