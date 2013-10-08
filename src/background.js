@@ -36,7 +36,15 @@ function schemaDescriptionForResponse(details) {
       });
   }
   if (contentTypeHeader.profile) {
-    schema["$ref"] = contentTypeHeader.profile;
+    profile = contentTypeHeader.profile;
+
+    if (profile[0] === '"' && profile[profile.length - 1] === '"') {
+      profile = profile.substr(1, profile.length - 2).replace(/\\(.)/g, function(a, b) {
+        return b;
+      });
+    }
+
+    schema["$ref"] = profile;
   }
   return schema;
 }
