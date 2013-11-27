@@ -28,4 +28,4 @@ Bugs
 
 + Please report bugs on [github](https://github.com/platy/json-browser)
 + If possible include a link that produces the bug
-+ Or test on [json-playground](http://peaceful-wildwood-2296.herokuapp.com/) and provide the steps that produce it (note that documents on json-playground are not persistent - also there is no documentation on how to use it at the moment)
++ Or test on [json-playground](http://jsonplayground.emberexperiments.co/) and provide the steps that produce it (note that documents on json-playground are not persistent - also there is no documentation on how to use it at the moment)
