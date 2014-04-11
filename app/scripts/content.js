@@ -56,11 +56,10 @@ function addCss(element, path) {
 
 function addJsonCss() {
   var head = document.getElementsByTagName("head")[0];
-  addCss(head, "renderers/common.css");
-  addCss(head, "renderers/basic.jsonary.css");
-  addCss(head, "renderers/highlight-fragment.css");
-  addCss(head, "style/browser.css");
-  addCss(head, "style/chrome-bootstrap.css");
+  addCss(head, "bower_components/jsonary/renderers/common.css");
+  addCss(head, "bower_components/jsonary/renderers/api.jsonary.css");
+  addCss(head, "styles/browser.css");
+  addCss(head, "styles/chrome-bootstrap.css");
 }
 
 function navigateTo(itemUrl, request) {
@@ -206,7 +205,7 @@ function onloadHandler() {
 
     var browserButton = document.createElement("div");
     browserButton.setAttribute('class', 'selectorButton');
-    browserButton.innerHTML = '<img src="' + chrome.extension.getURL("/logo/logo-19.png") + '"/>';
+    browserButton.innerHTML = '<img src="' + chrome.extension.getURL("/images/logo-19.png") + '"/>';
     browserButton.onclick = openSelector;
     document.body.appendChild(browserButton);
 

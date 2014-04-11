@@ -1,3 +1,7 @@
+
+(function () {
+ 'use strict';
+
 function Headers() {
   var headers = [];
   headers.addHeader = function (key, value) {
@@ -51,3 +55,4 @@ describe("Background Script", function (){
     });
   });
 });
+ })();

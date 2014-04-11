@@ -1,3 +1,7 @@
+
+(function () {
+ 'use strict';
+
 describe("Content Script", function(){
   describe("looksLikeJson", function(){
   	it("returns false for text", function(){
@@ -22,3 +26,4 @@ describe("Content Script", function(){
   	});
   });
 });
+})();

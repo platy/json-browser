@@ -1,0 +1,8 @@
+{
+  "name": "json-browser",
+  "version": "0.8.1",
+  "dependencies": {
+      "jsonary" : "v0.0.12"
+  },
+  "devDependencies": {}
+}

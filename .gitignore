@@ -1,2 +1,7 @@
 
 .DS_Store
+app/bower_components
+dist
+node_modules
+package
+test/bower_components
